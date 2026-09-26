@@ -981,7 +981,13 @@
         <div>
           <label style="font-size:11px">Period</label>
           <select id="si-add-period" style="width:100%">
-            ${[1,2,3,4,5,6,7].map(p => `<option value="${p}">${p}</option>`).join('')}
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
           </select>
         </div>
         <div>
@@ -1627,11 +1633,17 @@ function showScreen(name) {
 }
 
 function todayStr() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  return toLocalDateStr(new Date());
+}
+
+// Formats a Date using its LOCAL calendar date, not toISOString() (which
+// converts to UTC first and can land on the wrong day in timezones ahead of
+// UTC — e.g. British Summer Time — for a date built from local midnight).
+function toLocalDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function defaultDateStr() {
@@ -1819,7 +1831,7 @@ function getWeekBounds(dateStr) {
   const day = d.getDay(); // 0=Sun
   const mon = new Date(d); mon.setDate(d.getDate() - ((day + 6) % 7));
   const fri = new Date(mon); fri.setDate(mon.getDate() + 4);
-  return { start: mon.toISOString().slice(0,10), end: fri.toISOString().slice(0,10) };
+  return { start: toLocalDateStr(mon), end: toLocalDateStr(fri) };
 }
 
 function getWeeklyCounts(dateStr) {
@@ -2101,17 +2113,26 @@ async function runCoverage() {
 async function updateRosterAfterRun(newEntries, dateStr) {
   const roster = getRoster();
   const log = getLog();
+  // newEntries have already been pushed into log (and saved) by the time this
+  // runs, so they must be excluded here by reference — otherwise every entry
+  // looks "already credited" against itself and nothing is ever counted.
+  const newEntrySet = new Set(newEntries);
   // Find teachers already credited for this date (from previous runs)
   const alreadyCredited = new Set(
-    log.filter(e => e.date === dateStr && e.coveringTeacher &&
+    log.filter(e => e.date === dateStr && !newEntrySet.has(e) && e.coveringTeacher &&
       !isSpecialLabel(e.coveringTeacher))
       .map(e => e.coveringTeacher.replace(' (Emergency)', '').trim())
   );
   const toUpdate = [];
+  // A "coverage" is credited once per teacher per date, not once per period —
+  // track who this run already credited so a teacher covering two periods
+  // today doesn't get counted twice.
+  const creditedThisRun = new Set();
   newEntries.forEach(entry => {
     const ct = entry.coveringTeacher.replace(' (Emergency)', '').trim();
     if (isSpecialLabel(ct)) return;
-    if (alreadyCredited.has(ct)) return; // already counted for this date
+    if (alreadyCredited.has(ct) || creditedThisRun.has(ct)) return; // already counted for this date
+    creditedThisRun.add(ct);
     const teacher = roster.find(t => t.name === ct);
     if (teacher) {
       teacher.previousCoverageDate = teacher.lastCoverageDate;
@@ -2334,7 +2355,7 @@ function getWeekDatesFromDate(dateStr) {
   for (let i = 0; i < 5; i++) {
     const day = new Date(monday);
     day.setDate(monday.getDate() + i);
-    dates.push({ dateStr: day.toISOString().slice(0,10), dayName: dayNames[i] });
+    dates.push({ dateStr: toLocalDateStr(day), dayName: dayNames[i] });
   }
   return dates;
 }
@@ -3166,9 +3187,16 @@ async function applyOverride(idx, dateStr) {
 
   const oldT = roster.find(t => t.name === oldTeacher);
   if (oldT && !isSpecialLabel(oldTeacher)) {
-    oldT.totalCoverages = Math.max(0, (oldT.totalCoverages || 0) - 1);
-    const prior = log.filter(e => e.coveringTeacher?.replace(' (Emergency)', '').trim() === oldTeacher && e.date !== dateStr).map(e => e.date).sort();
-    oldT.lastCoverageDate = prior.length > 0 ? prior[prior.length - 1] : (oldT.previousCoverageDate || '');
+    // "Coverage" is counted per date, not per period — only roll back the
+    // total if this was the teacher's only assignment left on this date.
+    const stillCoveringToday = log.some(e => e.date === dateStr &&
+      !isSpecialLabel(e.coveringTeacher) &&
+      e.coveringTeacher.replace(' (Emergency)', '').trim() === oldTeacher);
+    if (!stillCoveringToday) {
+      oldT.totalCoverages = Math.max(0, (oldT.totalCoverages || 0) - 1);
+      const prior = log.filter(e => e.coveringTeacher?.replace(' (Emergency)', '').trim() === oldTeacher && e.date !== dateStr).map(e => e.date).sort();
+      oldT.lastCoverageDate = prior.length > 0 ? prior[prior.length - 1] : (oldT.previousCoverageDate || '');
+    }
     if (STORAGE_MODE === 'sharepoint') await saveTeacherSP(oldT);
   }
 
@@ -3200,9 +3228,16 @@ function resetOverride(idx, dateStr) {
   // Roll back old teacher stats
   const oldT = roster.find(t => t.name === oldTeacher);
   if (oldT && !isSpecialLabel(oldTeacher)) {
-    oldT.totalCoverages = Math.max(0, (oldT.totalCoverages || 0) - 1);
-    const prior = log.filter(e => e.coveringTeacher?.replace(' (Emergency)', '').trim() === oldTeacher && e.date !== dateStr).map(e => e.date).sort();
-    oldT.lastCoverageDate = prior.length > 0 ? prior[prior.length - 1] : (oldT.previousCoverageDate || '');
+    // "Coverage" is counted per date, not per period — only roll back the
+    // total if this was the teacher's only assignment left on this date.
+    const stillCoveringToday = log.some(e => e.date === dateStr &&
+      !isSpecialLabel(e.coveringTeacher) &&
+      e.coveringTeacher.replace(' (Emergency)', '').trim() === oldTeacher);
+    if (!stillCoveringToday) {
+      oldT.totalCoverages = Math.max(0, (oldT.totalCoverages || 0) - 1);
+      const prior = log.filter(e => e.coveringTeacher?.replace(' (Emergency)', '').trim() === oldTeacher && e.date !== dateStr).map(e => e.date).sort();
+      oldT.lastCoverageDate = prior.length > 0 ? prior[prior.length - 1] : (oldT.previousCoverageDate || '');
+    }
   }
 
   setRoster(roster);
@@ -3225,9 +3260,17 @@ function removeOverride(idx, dateStr) {
   // Roll back old teacher stats
   const oldT = roster.find(t => t.name === oldTeacher);
   if (oldT && !isSpecialLabel(oldTeacher)) {
-    oldT.totalCoverages = Math.max(0, (oldT.totalCoverages || 0) - 1);
-    const prior = log.filter(e => e.coveringTeacher?.replace(' (Emergency)', '').trim() === oldTeacher).map(e => e.date).sort();
-    oldT.lastCoverageDate = prior.length > 0 ? prior[prior.length - 1] : (oldT.previousCoverageDate || '');
+    // "Coverage" is counted per date, not per period — only roll back the
+    // total if this was the teacher's only assignment left on this date.
+    // (The removed entry is already filtered out of `log` above.)
+    const stillCoveringToday = log.some(e => e.date === dateStr &&
+      !isSpecialLabel(e.coveringTeacher) &&
+      e.coveringTeacher.replace(' (Emergency)', '').trim() === oldTeacher);
+    if (!stillCoveringToday) {
+      oldT.totalCoverages = Math.max(0, (oldT.totalCoverages || 0) - 1);
+      const prior = log.filter(e => e.coveringTeacher?.replace(' (Emergency)', '').trim() === oldTeacher).map(e => e.date).sort();
+      oldT.lastCoverageDate = prior.length > 0 ? prior[prior.length - 1] : (oldT.previousCoverageDate || '');
+    }
   }
 
   setRoster(roster);
@@ -3343,9 +3386,13 @@ function parseCSVLine(line) {
   let current = '';
   let inQuotes = false;
   for (let i = 0; i < line.length; i++) {
-    if (line[i] === '"') { inQuotes = !inQuotes; }
-    else if (line[i] === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
-    else { current += line[i]; }
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') { current += '"'; i++; } // escaped "" inside a quoted field
+      else { inQuotes = !inQuotes; }
+    }
+    else if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
+    else { current += ch; }
   }
   result.push(current.trim());
   return result;
@@ -4153,6 +4200,8 @@ async function importAllData(event) {
         setData('cs_roster', payload.roster);
         setData('cs_log', payload.log);
         if (payload.schedule) setData('cs_schedule', payload.schedule);
+        if (payload.roomChart) setData('cs_roomchart', payload.roomChart);
+        if (payload.seniorClassesEnded !== undefined) localStorage.setItem('cs_senior_ended', payload.seniorClassesEnded);
         if (payload.emailTemplate) localStorage.setItem('cs_email_template', payload.emailTemplate);
         // Restore per-date absences
         Object.entries(payload.absences || {}).forEach(([date, abs]) => {
@@ -4255,6 +4304,8 @@ function exportAllData(label) {
     roster: getRoster(),
     log: getLog(),
     schedule: getData('cs_schedule', {}),
+    roomChart: getData('cs_roomchart', {}),
+    seniorClassesEnded: localStorage.getItem('cs_senior_ended') || '0',
     emailTemplate: localStorage.getItem('cs_email_template') || '',
     absences,
     notes,
@@ -4348,7 +4399,7 @@ function renderWeeklyGrid() {
   for (let i = 0; i < 5; i++) {
     const d = new Date(start + 'T00:00:00');
     d.setDate(d.getDate() + i);
-    weekDates.push({ dateStr: d.toISOString().slice(0,10), dayName: dayNames[i], short: d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }) });
+    weekDates.push({ dateStr: toLocalDateStr(d), dayName: dayNames[i], short: d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }) });
   }
 
   const log = getLog();
