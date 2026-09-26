@@ -1,0 +1,4866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Coverage Assignment System</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --navy: #1a4c9f;
+    --navy-light: #2558b5;
+    --navy-dark: #1c212e;
+    --gold: #f7cb57;
+    --gold-light: #fad978;
+    --gold-dark: #e0b640;
+    --light-blue: #6699cc;
+    --light-blue-bg: #e8f0f9;
+    --cream: #f7f9fc;
+    --white: #ffffff;
+    --gray-100: #f0f4f8;
+    --gray-200: #dde4ed;
+    --gray-400: #8fa3bc;
+    --gray-600: #4d6480;
+    --gray-800: #1c212e;
+    --green: #1a6b3c;
+    --green-light: #e6f4ec;
+    --red: #c1121f;
+    --red-light: #fdecea;
+    --amber: #9a6200;
+    --amber-light: #fef3c7;
+    --shadow-sm: 0 1px 3px rgba(26,76,159,0.08);
+    --shadow-md: 0 4px 16px rgba(26,76,159,0.12);
+    --shadow-lg: 0 8px 32px rgba(26,76,159,0.18);
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--cream);
+    color: var(--gray-800);
+    min-height: 100vh;
+    font-size: 14px;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    background: var(--navy);
+    color: var(--white);
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 80px;
+    box-shadow: var(--shadow-md);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 20px;
+    letter-spacing: 0.3px;
+    color: var(--white);
+  }
+  .header-title span { color: var(--gold); }
+
+  /* ── NAV ── */
+  .nav {
+    display: flex;
+    gap: 4px;
+  }
+  .nav-btn {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.6);
+    padding: 8px 14px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .nav-btn:hover { background: rgba(255,255,255,0.1); color: var(--white); }
+  .nav-btn.active { background: var(--gold); color: var(--navy-dark); font-weight: 600; }
+
+  /* ── MAIN ── */
+  .main { max-width: 1100px; margin: 0 auto; padding: 28px 24px; }
+
+  /* ── SCREEN ── */
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--gray-200);
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+  .card-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 18px;
+    color: var(--navy-dark);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-title .badge {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--light-blue);
+    color: var(--white);
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+
+  /* ── FORMS ── */
+  .form-row { display: grid; gap: 12px; margin-bottom: 12px; }
+  .form-row.cols-2 { grid-template-columns: 1fr 1fr; }
+  .form-row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .form-row.cols-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  .form-row.cols-5 { grid-template-columns: 1fr 1fr 1fr 1fr 1fr; }
+
+  label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--gray-600);
+    margin-bottom: 4px;
+  }
+  /* A <label> wrapping a hidden file input is a button, not a field label.
+     Without this it inherits the uppercase small-caps styling above and the
+     global input width:100%, which stretches the control across the row. */
+  label.btn {
+    display: inline-flex;
+    align-items: center;
+    text-transform: none;
+    letter-spacing: normal;
+    font-size: 13px;
+    margin-bottom: 0;
+  }
+  .sync-block-title {
+    font-weight: 600;
+    font-size: 12px;
+    margin-bottom: 4px;
+    text-transform: none;
+    letter-spacing: normal;
+  }
+  .sync-chip {
+    font-size: 11px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: 3px;
+    padding: 2px 6px;
+    margin: 2px;
+    display: inline-block;
+  }
+  .sync-pick-box {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: 4px;
+    padding: 8px 10px;
+    margin-top: 4px;
+  }
+  .sync-pick-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 4px 2px;
+    margin: 0;
+    font-size: 13px;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: normal;
+    color: var(--gray-800);
+    cursor: pointer;
+  }
+  .sync-pick-row:hover { background: var(--gray-100); }
+  .sync-pick-row input[type="checkbox"] {
+    width: auto;
+    flex: none;
+    margin: 0;
+    padding: 0;
+  }
+  .sync-note {
+    font-size: 11px;
+    color: var(--gray-600);
+    margin-top: 6px;
+    line-height: 1.4;
+  }
+  select.tier-inline {
+    width: auto;
+    min-width: 52px;
+    padding: 3px 6px;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+  }
+  .sync-tier-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 3px 2px;
+    font-size: 13px;
+    color: var(--gray-800);
+  }
+  input, select, textarea {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1.5px solid var(--gray-200);
+    border-radius: var(--radius-sm);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    color: var(--gray-800);
+    background: var(--white);
+    transition: border-color 0.15s;
+    outline: none;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--light-blue); }
+  select { cursor: pointer; }
+  textarea { resize: vertical; min-height: 60px; }
+
+  /* ── BUTTONS ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 18px;
+    border-radius: var(--radius-sm);
+    border: none;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn-primary { background: var(--navy); color: var(--white); }
+  .btn-primary:hover { background: var(--navy-light); }
+  .btn-gold { background: var(--gold); color: var(--navy-dark); font-weight: 700; }
+  .btn-gold:hover { background: var(--gold-light); }
+  .btn-ghost { background: transparent; color: var(--navy); border: 1.5px solid var(--gray-200); }
+  .btn-ghost:hover { border-color: var(--light-blue); background: var(--light-blue-bg); }
+  .btn-danger { background: var(--red-light); color: var(--red); border: 1px solid #f5c6c8; }
+  .btn-danger:hover { background: #f5c6c8; }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+  .btn-lg { padding: 12px 28px; font-size: 15px; }
+
+  /* ── TABLES ── */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    background: var(--gray-100);
+    color: var(--gray-600);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 2px solid var(--gray-200);
+  }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--gray-100); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--gray-100); }
+
+  /* ── TAGS/CHIPS ── */
+  .tier-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .tier-1 { background: var(--light-blue-bg); color: var(--navy); }
+  .tier-2 { background: var(--green-light); color: var(--green); }
+  .tier-3 { background: var(--amber-light); color: var(--amber); }
+  .tier-e { background: var(--red-light); color: var(--red); }
+
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .tag-green { background: var(--green-light); color: var(--green); }
+  .tag-amber { background: var(--amber-light); color: var(--amber); }
+  .tag-red { background: var(--red-light); color: var(--red); }
+  .tag-navy { background: var(--light-blue-bg); color: var(--navy); }
+
+  /* ── ALERTS ── */
+  .alert {
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 16px;
+    font-size: 13px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .alert-warn { background: var(--amber-light); color: var(--amber); border: 1px solid #fde68a; }
+  .alert-error { background: var(--red-light); color: var(--red); border: 1px solid #fca5a5; }
+  .alert-success { background: var(--green-light); color: var(--green); border: 1px solid #bbf7d0; }
+  .alert-info { background: var(--light-blue-bg); color: var(--navy); border: 1px solid var(--light-blue); }
+
+  /* ── OUTPUT DOC ── */
+  .output-doc {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 32px;
+    font-family: 'Georgia', serif;
+    line-height: 1.6;
+  }
+  .output-doc h1 {
+    font-size: 18px;
+    text-align: center;
+    color: var(--navy-dark);
+    margin-bottom: 20px;
+    font-weight: bold;
+  }
+  .output-email-template {
+    background: var(--light-blue-bg);
+    border-left: 3px solid var(--navy);
+    padding: 12px 16px;
+    margin-bottom: 24px;
+    font-size: 13px;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .output-email-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--gray-400);
+    margin-bottom: 4px;
+  }
+  .output-absent-header {
+    font-weight: bold;
+    color: var(--navy);
+    margin: 16px 0 6px;
+    font-size: 14px;
+  }
+  .output-period-line {
+    padding: 3px 0 3px 20px;
+    font-size: 11px;
+  }
+  .output-period-line .period-label { font-weight: bold; }
+  .output-period-line .teacher-name { font-weight: bold; }
+  .sub-plan-note {
+    width: calc(100% - 20px);
+    border: none;
+    border-left: 2px solid var(--light-blue);
+    background: transparent;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    color: var(--gray-600);
+    font-style: italic;
+    padding: 3px 8px;
+    margin: 3px 0 8px 20px;
+    resize: none;
+    outline: none;
+    min-height: 26px;
+    display: block;
+  }
+  .sub-plan-note:focus { border-left-color: var(--light-blue); background: var(--light-blue-bg); }
+  .sub-plan-note::placeholder { color: var(--gray-400); }
+  .output-warning {
+    color: var(--red);
+    font-weight: bold;
+    margin-top: 16px;
+    font-size: 13px;
+  }
+
+  /* ── DIVIDER ── */
+  .divider { border: none; border-top: 1px solid var(--gray-200); margin: 20px 0; }
+
+  /* ── FLEX UTILS ── */
+  .flex { display: flex; }
+  .flex-between { display: flex; justify-content: space-between; align-items: center; }
+  .flex-end { display: flex; justify-content: flex-end; gap: 8px; }
+  .gap-8 { gap: 8px; }
+  .gap-12 { gap: 12px; }
+  .mt-8 { margin-top: 8px; }
+  .mt-16 { margin-top: 16px; }
+  .mt-20 { margin-top: 20px; }
+
+  /* ── EMPTY STATE ── */
+  .empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--gray-400);
+  }
+  .empty-icon { font-size: 36px; margin-bottom: 8px; }
+  .empty-text { font-size: 14px; }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    padding: 28px;
+    width: 100%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .modal-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 20px;
+    color: var(--navy);
+    margin-bottom: 20px;
+  }
+
+  /* ── SUMMARY TABLE COLORS ── */
+  .summary-t1 { background: var(--light-blue-bg); }
+  .summary-t2 { background: var(--green-light); }
+  .summary-t3 { background: var(--amber-light); }
+  .summary-te { background: var(--red-light); }
+
+  /* ── ASSIGN REASON TOOLTIP ── */
+  .assign-reason {
+    position: relative;
+    cursor: help;
+    border-bottom: 1px dotted var(--gray-400);
+  }
+  .assign-reason::after {
+    content: attr(data-reason);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--navy-dark);
+    color: var(--white);
+    font-size: 11px;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 400;
+    white-space: nowrap;
+    padding: 5px 10px;
+    border-radius: 5px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 999;
+  }
+  .assign-reason:hover::after { opacity: 1; }
+
+  /* ── PRINT ── */
+  @media print {
+    .header, .nav, .btn, .card:not(.output-card) { display: none !important; }
+    .output-doc { border: none; padding: 0; }
+    body { background: white; }
+  }
+
+  /* ── SUB SCHEDULE PRINT MODAL ── */
+  #sub-print-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 2000;
+    align-items: center;
+    justify-content: center;
+  }
+  #sub-print-overlay.open { display: flex; }
+  #sub-print-content {
+    background: white;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    width: 680px;
+    max-width: 95vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 32px;
+  }
+
+  /* ── SUB SCHEDULE PRINT STYLES ── */
+  .sub-schedule-page {
+    font-family: 'Georgia', serif;
+    color: #111;
+    page-break-after: always;
+    padding-bottom: 24px;
+    border-bottom: 2px solid #ccc;
+    margin-bottom: 32px;
+  }
+  .sub-schedule-page:last-of-type { page-break-after: avoid; border-bottom: none; margin-bottom: 0; }
+  .sub-schedule-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 3px solid #1a4c9f;
+  }
+  .sub-schedule-school { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px; }
+  .sub-schedule-title { font-size: 22px; font-weight: bold; color: #1a4c9f; }
+  .sub-schedule-date { font-size: 13px; color: #444; margin-top: 4px; }
+  .sub-schedule-meta { text-align: right; font-size: 12px; color: #666; }
+  .sub-period-card {
+    border: 1.5px solid #dde4ed;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  .sub-period-header {
+    background: #1a4c9f;
+    color: white;
+    padding: 8px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .sub-period-label { font-size: 14px; font-weight: bold; }
+  .sub-period-room { font-size: 12px; opacity: 0.85; }
+  .sub-period-body { padding: 12px 16px; }
+  .sub-period-course { font-size: 15px; font-weight: bold; color: #1c212e; margin-bottom: 4px; }
+  .sub-period-absent { font-size: 12px; color: #666; margin-bottom: 10px; }
+  .sub-period-notes {
+    background: #f7f9fc;
+    border-left: 3px solid #6699cc;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: #333;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    border-radius: 0 4px 4px 0;
+  }
+  .sub-period-notes-placeholder {
+    background: #f7f9fc;
+    border-left: 3px solid #dde4ed;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: #aaa;
+    font-style: italic;
+    border-radius: 0 4px 4px 0;
+  }
+  .sub-schedule-footer {
+    margin-top: 20px;
+    padding-top: 12px;
+    border-top: 1px solid #dde4ed;
+    font-size: 11px;
+    color: #888;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  @media print {
+    #sub-print-overlay { display: block !important; position: static !important; background: none !important; }
+    #sub-print-content { box-shadow: none !important; padding: 0 !important; max-height: none !important; overflow: visible !important; }
+    .no-print { display: none !important; }
+    .sub-schedule-page { page-break-after: always; }
+    .sub-schedule-page:last-of-type { page-break-after: avoid; }
+    /* Hide everything else when printing sub schedule */
+    body > *:not(#sub-print-overlay) { display: none !important; }
+  }
+
+  /* ── PERIOD GRID ── */
+  .period-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+  .period-toggle {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    border: 1.5px solid var(--gray-200);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--gray-400);
+    background: var(--white);
+    transition: all 0.12s;
+    user-select: none;
+  }
+  .period-toggle.on {
+    background: var(--navy);
+    border-color: var(--navy);
+    color: var(--gold);
+  }
+  .day-avail-row {
+    display: grid;
+    grid-template-columns: 80px 1fr auto;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .avail-all {
+    padding: 4px 10px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .day-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--gray-600);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── LOADING ── */
+  .spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">Coverage <span>System</span></div>
+  <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+    <nav class="nav" id="nav-main">
+      <button class="nav-btn active" onclick="showScreen('run')">Run Coverage</button>
+      <button class="nav-btn" onclick="showScreen('roster')">Roster</button>
+      <button class="nav-btn" onclick="showScreen('log')">Log</button>
+      <button class="nav-btn" onclick="showScreen('summary')">Summary</button>
+    </nav>
+    <nav class="nav" id="nav-data" style="opacity:0.85">
+      <button class="nav-btn" onclick="showScreen('schedule')">Schedule</button>
+      <button class="nav-btn" onclick="showScreen('roomchart')">Room Chart</button>
+      <div style="position:relative;display:inline-block">
+        <button class="nav-btn" onclick="toggleDataMenu()" id="data-menu-btn">Data ▾</button>
+        <div id="data-menu" style="display:none;position:absolute;right:0;top:100%;background:var(--navy-dark);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);min-width:140px;z-index:200;padding:4px 0">
+          <button onclick="exportToExcel();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:white;font-family:inherit;font-size:13px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Excel Export</button>
+          <button onclick="exportAllData();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:white;font-family:inherit;font-size:13px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Backup</button>
+          <label style="display:block;width:100%;text-align:left;padding:8px 16px;color:white;font-family:inherit;font-size:13px;font-weight:400;text-transform:none;letter-spacing:normal;margin-bottom:0;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Restore
+            <input type="file" accept=".json" style="display:none" onchange="importAllData(event);toggleDataMenu()" />
+          </label>
+          <div style="height:1px;background:rgba(255,255,255,0.15);margin:4px 0"></div>
+          <button onclick="startNewYear();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:white;font-family:inherit;font-size:13px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Start New Year</button>
+          <button onclick="clearRoster();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:#ff9d9d;font-family:inherit;font-size:13px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Clear Roster</button>
+        </div>
+      </div>
+    </nav>
+  </div>
+</div>
+
+
+
+<div class="main">
+
+  <!-- ══════════════════════════════════════════
+       SCREEN: RUN COVERAGE
+  ══════════════════════════════════════════ -->
+  <div id="screen-run" class="screen active">
+
+    <div class="card">
+      <div class="flex-between">
+        <div class="card-title">Run Coverage</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="showScreen('override')">Override</button>
+          <button class="btn btn-danger btn-sm" onclick="openResetModal()">↩ Reset Day</button>
+        </div>
+      </div>
+
+      <!-- Date input -->
+      <div class="form-row cols-3">
+        <div>
+          <label>Date</label>
+          <input type="date" id="run-date" onchange="onDateChange()" />
+        </div>
+        <div>
+          <label>End Date (for range)</label>
+          <input type="date" id="run-date-end" placeholder="Optional" />
+        </div>
+        <div>
+          <label>Outside Subs Coming</label>
+          <select id="outside-sub-count">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+          </select>
+        </div>
+        <div>
+          <label>Senior Classes</label>
+          <label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer;font-size:13px">
+            <input type="checkbox" id="senior-classes-ended" onchange="saveSeniorClassesFlag()" />
+            Senior classes ended
+          </label>
+        </div>
+      </div>
+
+      <!-- Absences table -->
+      <div class="flex-between mt-16" style="margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <label style="margin:0;font-size:13px;font-weight:600;color:var(--gray-800)">Absences</label>
+          <label class="btn btn-ghost btn-sm" style="cursor:pointer;margin:0" title="Upload your Veracross All Classes CSV">
+            Load Schedule
+            <input type="file" accept=".csv" style="display:none" onchange="loadScheduleCSV(event)" />
+          </label>
+          <label class="btn btn-ghost btn-sm" style="cursor:pointer;margin:0" title="Upload your room chart CSV">
+            Load Room Chart
+            <input type="file" accept=".csv" style="display:none" onchange="loadRoomChartCSV(event)" />
+          </label>
+          <span id="schedule-status" style="font-size:11px;color:var(--gray-400)"></span>
+          <span id="roomchart-status" style="font-size:11px;color:var(--gray-400)"></span>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-gold btn-sm" onclick="openAddByTeacher()">+ Add by Teacher</button>
+          <button class="btn btn-ghost btn-sm" onclick="addAbsenceRow()">+ Blank Row</button>
+          <button class="btn btn-ghost btn-sm" onclick="openOutAllWeek()">+ Out All Week</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table id="absences-table">
+          <thead>
+            <tr>
+              <th>Absent Teacher</th>
+              <th>Period</th>
+              <th>Course Name</th>
+              <th>Section</th>
+              <th>Room</th>
+              <th style="text-align:center">Type</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="absences-tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="flex-end mt-16" style="gap:8px">
+        <button class="btn btn-ghost btn-lg" onclick="showAvailPanel()">Who is available</button>
+        <button class="btn btn-gold btn-lg" onclick="runCoverage()">
+          ▶ Assign Coverage
+        </button>
+      </div>
+    </div>
+
+    <!-- Availability Panel -->
+    <div id="avail-panel" class="card" style="display:none">
+      <div class="flex-between" style="margin-bottom:12px">
+        <div class="card-title" style="margin:0">Who is available <span id="avail-panel-date"></span></div>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('avail-panel').style.display='none'">Hide</button>
+      </div>
+      <div id="avail-panel-body"></div>
+    </div>
+
+    <!-- Output -->
+    <div id="output-area" style="display:none">
+      <div class="card output-card">
+        <div class="flex-between" style="margin-bottom:16px">
+          <div class="card-title" style="margin:0">Coverage Assignment</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" onclick="copyFullAssignment()">📋 Copy Assignment</button>
+            <button class="btn btn-ghost btn-sm" onclick="openSubPrint()">🖨 Sub Schedule</button>
+            <button class="btn btn-primary btn-sm" onclick="window.print()">🖨 Print All</button>
+          </div>
+        </div>
+        <div class="output-doc" id="output-doc"></div>
+      </div>
+    </div>
+
+    <!-- Manual Mode -->
+    <div class="card" style="margin-top:8px">
+      <div class="flex-between" style="cursor:pointer" onclick="toggleManualMode()">
+        <div class="card-title" style="margin:0">Manual Mode</div>
+        <span id="manual-toggle-label" style="font-size:12px;color:var(--gray-400)">Show</span>
+      </div>
+      <div id="manual-body" style="display:none;margin-top:16px">
+        <div class="form-row" style="margin-bottom:16px;align-items:flex-end">
+          <div class="fg">
+            <label>Date</label>
+            <input type="date" id="manual-date" onchange="renderManualTable()" />
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="renderManualTable()">Load</button>
+          <button class="btn btn-ghost btn-sm" onclick="copyManualOutput()">Copy output</button>
+          <button class="btn btn-ghost btn-sm" onclick="downloadManualOutput()">Download</button>
+        </div>
+        <div id="manual-table"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SCREEN: ROSTER
+  ══════════════════════════════════════════ -->
+  <div id="screen-roster" class="screen">
+    <div class="card">
+      <div class="flex-between" style="margin-bottom:16px">
+        <div class="card-title" style="margin:0">
+          Teacher Roster
+          <span class="badge" id="roster-count">0</span>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost" onclick="deriveAvailabilityFromSchedule()" title="Sync roster availability with assigned Coverage periods, add new teachers, flag departed ones">Sync with Schedule</button>
+          <button class="btn btn-ghost" onclick="recalculateCoveragesFromLog()" title="Reset all coverage totals to match what is actually in the log">Recalculate from Log</button>
+          <button class="btn btn-ghost" onclick="openGrade12TempModal()" title="Mark grade 12 class periods as temporary coverage availability">Grade 12 Temp Periods</button>
+          <button class="btn btn-primary" onclick="openTeacherModal()">+ Add Teacher</button>
+        </div>
+      </div>
+
+      <div id="import-alert" style="display:none"></div>
+      <div id="derive-report" style="display:none"></div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortRoster('name')">Name <span id="ros-sort-name"></span></th>
+              <th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortRoster('tier')">Tier <span id="ros-sort-tier"></span></th>
+              <th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortRoster('avail')">Hi-Avail <span id="ros-sort-avail"></span></th>
+              <th>Excluded</th>
+              <th>Mon</th>
+              <th>Tue</th>
+              <th>Wed</th>
+              <th>Thu</th>
+              <th>Fri</th>
+              <th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortRoster('last')">Last Coverage <span id="ros-sort-last"></span></th>
+              <th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortRoster('total')">Total <span id="ros-sort-total"></span></th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="roster-tbody"></tbody>
+        </table>
+      </div>
+      <div id="roster-empty" class="empty" style="display:none">
+        <div class="empty-icon">👤</div>
+        <div class="empty-text">No teachers added yet. Click "Add Teacher" to get started.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SCREEN: LOG
+  ══════════════════════════════════════════ -->
+  <div id="screen-log" class="screen">
+    <div class="card">
+      <div class="flex-between" style="margin-bottom:16px">
+        <div class="card-title" style="margin:0">Coverage Log</div>
+        <button class="btn btn-danger btn-sm" onclick="clearLog()">Clear All</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="cursor:pointer;user-select:none" onclick="sortLog('date')">Date <span id="log-sort-date"></span></th>
+              <th style="cursor:pointer;user-select:none" onclick="sortLog('absentTeacher')">Absent Teacher <span id="log-sort-absentTeacher"></span></th>
+              <th style="cursor:pointer;user-select:none" onclick="sortLog('period')">Period <span id="log-sort-period"></span></th>
+              <th>Course</th>
+              <th>Section</th>
+              <th>Room</th>
+              <th style="cursor:pointer;user-select:none" onclick="sortLog('coveringTeacher')">Covering Teacher <span id="log-sort-coveringTeacher"></span></th>
+            </tr>
+          </thead>
+          <tbody id="log-tbody"></tbody>
+        </table>
+      </div>
+      <div id="log-empty" class="empty" style="display:none">
+        <div class="empty-icon">📋</div>
+        <div class="empty-text">No coverage assignments logged yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SCREEN: SUMMARY
+  ══════════════════════════════════════════ -->
+  <div id="screen-summary" class="screen">
+    <div class="card">
+      <div class="flex-between" style="margin-bottom:16px">
+        <div class="card-title" style="margin:0">Coverage Summary</div>
+        <button class="btn btn-ghost btn-sm" onclick="renderSummary()">Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="cursor:pointer;user-select:none" onclick="sortSummary('name')">Teacher <span id="sum-sort-name"></span></th>
+              <th style="cursor:pointer;user-select:none" onclick="sortSummary('tier')">Tier <span id="sum-sort-tier"></span></th>
+              <th style="cursor:pointer;user-select:none" onclick="sortSummary('total')">Total (Year) <span id="sum-sort-total"></span></th>
+              <th style="cursor:pointer;user-select:none" onclick="sortSummary('week')">This Week <span id="sum-sort-week"></span></th>
+              <th style="cursor:pointer;user-select:none" onclick="sortSummary('last')">Last Coverage <span id="sum-sort-last"></span></th>
+            </tr>
+          </thead>
+          <tbody id="summary-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="flex-between" style="margin-bottom:16px">
+        <div class="card-title" style="margin:0">Weekly Coverage Grid</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="date" id="weekly-grid-date" style="font-size:12px;padding:5px 8px" onchange="renderWeeklyGrid()" />
+          <button class="btn btn-ghost btn-sm" onclick="renderWeeklyGrid()">Refresh</button>
+        </div>
+      </div>
+      <div id="weekly-grid-body" class="table-wrap"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SCREEN: OVERRIDE
+  ══════════════════════════════════════════ -->
+  <div id="screen-override" class="screen">
+    <div class="card">
+      <div class="flex-between" style="margin-bottom:16px">
+        <div class="card-title" style="margin:0">Manual Override</div>
+        <button class="btn btn-ghost btn-sm" onclick="showScreen('run')">← Back</button>
+      </div>
+      <div class="form-row cols-2">
+        <div>
+          <label>Date</label>
+          <input type="date" id="override-date" />
+        </div>
+        <div style="display:flex;align-items:flex-end">
+          <button class="btn btn-primary" onclick="loadOverrideEntries()">Load Assignments</button>
+        </div>
+      </div>
+      <div id="override-entries" style="margin-top:16px"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SCREEN: SCHEDULE INSPECTOR
+  ══════════════════════════════════════════ -->
+  <div id="screen-schedule" class="screen">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title" style="margin-bottom:12px">Add Class</div>
+      <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 80px 1fr auto;gap:8px;align-items:end">
+        <div>
+          <label style="font-size:11px">Teacher</label>
+          <select id="si-add-teacher" style="width:100%"><option value="">Select...</option></select>
+        </div>
+        <div>
+          <label style="font-size:11px">Class ID</label>
+          <input type="text" id="si-add-section" placeholder="e.g. SCI 8-1" style="width:100%" />
+        </div>
+        <div>
+          <label style="font-size:11px">Course Name</label>
+          <input type="text" id="si-add-course" placeholder="e.g. Physical Science 8" style="width:100%" />
+        </div>
+        <div>
+          <label style="font-size:11px">Day</label>
+          <select id="si-add-day" style="width:100%">
+            <option value="Monday">Monday</option>
+            <option value="Tuesday">Tuesday</option>
+            <option value="Wednesday">Wednesday</option>
+            <option value="Thursday">Thursday</option>
+            <option value="Friday">Friday</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px">Period</label>
+          <select id="si-add-period" style="width:100%">
+            ${[1,2,3,4,5,6,7].map(p => `<option value="${p}">${p}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px">Room (optional)</label>
+          <input type="text" id="si-add-room" placeholder="e.g. 309" style="width:100%" />
+        </div>
+        <div>
+          <button class="btn btn-primary btn-sm" onclick="scheduleAddClass()" style="white-space:nowrap">Add Class</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="flex-between" style="margin-bottom:16px">
+        <div class="card-title" style="margin:0">Loaded Schedule <span class="badge" id="schedule-inspector-count">0</span></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" id="schedule-inspector-search" placeholder="Search class ID or teacher..." style="width:220px;font-size:12px" oninput="renderScheduleInspector()" />
+          <button class="btn btn-ghost btn-sm" onclick="renderScheduleInspector()">Refresh</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Teacher</th>
+              <th>Class ID</th>
+              <th>Course</th>
+              <th>Day</th>
+              <th>Period</th>
+              <th>Room (stored)</th>
+              <th>Room (chart)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="schedule-inspector-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SCREEN: ROOM CHART INSPECTOR
+  ══════════════════════════════════════════ -->
+  <div id="screen-roomchart" class="screen">
+    <div class="card">
+      <div class="flex-between" style="margin-bottom:16px">
+        <div class="card-title" style="margin:0">Loaded Room Chart <span class="badge" id="roomchart-inspector-count">0</span></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" id="roomchart-inspector-search" placeholder="Search class ID or room..." style="width:220px;font-size:12px" oninput="renderRoomChartInspector()" />
+          <button class="btn btn-ghost btn-sm" onclick="renderRoomChartInspector()">Refresh</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Class ID</th>
+              <th>Day</th>
+              <th>Period</th>
+              <th>Room</th>
+            </tr>
+          </thead>
+          <tbody id="roomchart-inspector-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<!-- ══════════════════════════════════════════
+     MODALS
+══════════════════════════════════════════ -->
+
+<!-- Teacher Modal -->
+<div class="modal-overlay" id="teacher-modal">
+  <div class="modal">
+    <div class="modal-title" id="teacher-modal-title">Add Teacher</div>
+    <div class="form-row cols-2">
+      <div>
+        <label>Full Name</label>
+        <input type="text" id="t-name" placeholder="Last First" />
+      </div>
+      <div>
+        <label>Tier</label>
+        <select id="t-tier">
+          <option value="1">Tier 1 — Called most</option>
+          <option value="2">Tier 2 — Moderate</option>
+          <option value="3">Tier 3 — Protected</option>
+          <option value="E">E — Emergency only</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row cols-2">
+      <div>
+        <label>High Availability</label>
+        <select id="t-high-avail">
+          <option value="">No</option>
+          <option value="Y">Yes (3-class teacher)</option>
+        </select>
+      </div>
+      <div>
+        <label>Temporarily Excluded</label>
+        <select id="t-excluded">
+          <option value="">No</option>
+          <option value="Y">Yes</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="margin-bottom:6px;margin-top:8px">
+      <label>Availability by Day & Period</label>
+      <div style="font-size:11px;color:var(--gray-400);margin-bottom:8px">Click periods to toggle availability</div>
+    </div>
+    <div id="avail-grid"></div>
+
+    <div class="form-row cols-2" style="margin-top:12px">
+      <div>
+        <label>Last Coverage Date</label>
+        <input type="date" id="t-last-date" />
+      </div>
+      <div>
+        <label>Total Coverages (Year)</label>
+        <input type="number" id="t-total" value="0" min="0" />
+      </div>
+    </div>
+
+    <div class="flex-end mt-20">
+      <button class="btn btn-ghost" onclick="closeTeacherModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTeacher()">Save Teacher</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add by Teacher Modal -->
+<div class="modal-overlay" id="add-by-teacher-modal">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-title">Add Absences by Teacher</div>
+    <p style="font-size:12px;color:var(--gray-400);margin-bottom:16px">Select a teacher, then check which periods need coverage. Course info will auto-fill from the loaded schedule.</p>
+
+    <div style="margin-bottom:16px">
+      <label>Absent Teacher</label>
+      <select id="abt-teacher" style="width:100%" onchange="loadTeacherPeriods()">
+        <option value="">Select teacher...</option>
+      </select>
+    </div>
+
+    <div id="abt-day-info" style="font-size:12px;color:var(--gray-600);margin-bottom:8px"></div>
+    <div id="abt-periods" style="margin-bottom:16px"></div>
+    <div id="abt-no-schedule" class="alert alert-warn" style="display:none">No schedule loaded. Upload your Veracross CSV using the "Load Schedule" button first, or add rows manually.</div>
+
+    <div class="flex-end">
+      <button class="btn btn-ghost" onclick="closeAddByTeacher()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmAddByTeacher()">Add to Absences</button>
+    </div>
+  </div>
+</div>
+
+<!-- Reset Modal -->
+<div class="modal-overlay" id="reset-modal">
+  <div class="modal">
+    <div class="modal-title">Reset a Day</div>
+    <p style="color:var(--gray-600);margin-bottom:16px;font-size:13px">This will remove all log entries for the selected date and roll back teacher coverage counts and dates.</p>
+    <div>
+      <label>Date to Reset</label>
+      <input type="date" id="reset-date" />
+    </div>
+    <div class="flex-end mt-20">
+      <button class="btn btn-ghost" onclick="closeResetModal()">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmReset()">Reset This Day</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="grade12-temp-modal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-title">Grade 12 Temporary Periods</div>
+    <p style="color:var(--gray-600);margin-bottom:16px;font-size:13px">Teachers with grade 12 classes will have those periods marked as temporary once senior classes end. Temporary periods are still available for coverage but deprioritized — used only after all regular availability is exhausted.</p>
+    <div id="grade12-temp-body" style="max-height:360px;overflow-y:auto;margin-bottom:16px"></div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="btn btn-ghost btn-sm" onclick="document.querySelectorAll('.g12-check').forEach(c => c.checked = true)">Select All</button>
+      <button class="btn btn-ghost btn-sm" onclick="document.querySelectorAll('.g12-check').forEach(c => c.checked = false)">Deselect All</button>
+    </div>
+    <div class="flex-end mt-20" style="gap:8px">
+      <button class="btn btn-ghost" onclick="document.getElementById('grade12-temp-modal').classList.remove('open')">Cancel</button>
+      <button class="btn btn-ghost" onclick="clearAllTempPeriods()">Clear All Temporary</button>
+      <button class="btn btn-primary" onclick="applyGrade12TempPeriods()">Mark as Temporary</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  STORAGE ADAPTER
+//  Switch STORAGE_MODE between 'local' and 'sharepoint'
+//  'local'      → uses browser localStorage (default, works offline)
+//  'sharepoint' → uses SharePoint REST API (requires hosted on SharePoint)
+// ═══════════════════════════════════════════════════════
+
+const STORAGE_MODE = 'local'; // ← flip to 'sharepoint' when ready
+
+// Your SharePoint site URL — set this before switching to sharepoint mode
+// Example: 'https://yourschool.sharepoint.com/sites/AdminTeam'
+const SP_SITE_URL = 'https://cognitaschoolsuk.sharepoint.com/teams/YorkPrepTech';
+
+// ── SharePoint REST helpers ──────────────────────────
+
+async function spGet(listName, filter) {
+  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${listName}')/items` +
+    (filter ? `?$filter=${encodeURIComponent(filter)}&$top=5000` : '?$top=5000');
+  const res = await fetch(url, {
+    headers: { 'Accept': 'application/json;odata=nometadata' }
+  });
+  if (!res.ok) throw new Error(`SharePoint GET ${listName} failed: ${res.status}`);
+  const data = await res.json();
+  return data.value;
+}
+
+async function spPost(listName, item) {
+  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${listName}')/items`;
+  const digest = await getRequestDigest();
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json;odata=nometadata',
+      'Content-Type': 'application/json;odata=nometadata',
+      'X-RequestDigest': digest,
+    },
+    body: JSON.stringify(item)
+  });
+  if (!res.ok) throw new Error(`SharePoint POST ${listName} failed: ${res.status}`);
+  return res.json();
+}
+
+async function spPatch(listName, itemId, item) {
+  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${listName}')/items(${itemId})`;
+  const digest = await getRequestDigest();
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json;odata=nometadata',
+      'Content-Type': 'application/json;odata=nometadata',
+      'X-RequestDigest': digest,
+      'X-HTTP-Method': 'MERGE',
+      'If-Match': '*',
+    },
+    body: JSON.stringify(item)
+  });
+  if (!res.ok) throw new Error(`SharePoint PATCH ${listName} failed: ${res.status}`);
+}
+
+async function spDelete(listName, itemId) {
+  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${listName}')/items(${itemId})`;
+  const digest = await getRequestDigest();
+  await fetch(url, {
+    method: 'POST',
+    headers: {
+      'X-RequestDigest': digest,
+      'X-HTTP-Method': 'DELETE',
+      'If-Match': '*',
+    }
+  });
+}
+
+let _spDigest = null;
+let _spDigestExpiry = 0;
+async function getRequestDigest() {
+  if (_spDigest && Date.now() < _spDigestExpiry) return _spDigest;
+  const res = await fetch(`${SP_SITE_URL}/_api/contextinfo`, {
+    method: 'POST',
+    headers: { 'Accept': 'application/json;odata=nometadata' }
+  });
+  const data = await res.json();
+  _spDigest = data.FormDigestValue;
+  _spDigestExpiry = Date.now() + (data.FormDigestTimeoutSeconds - 30) * 1000;
+  return _spDigest;
+}
+
+// ── Data shape converters ────────────────────────────
+// Convert between app format (camelCase, Sets) and SharePoint list format
+
+function teacherToSP(t) {
+  return {
+    Title: t.name,
+    Name: t.name,
+    Tier: t.tier,
+    HighAvail: t.highAvail || false,
+    Excluded: t.excluded || false,
+    AvailMon: [...(t.avail?.Monday || [])].join(','),
+    AvailTue: [...(t.avail?.Tuesday || [])].join(','),
+    AvailWed: [...(t.avail?.Wednesday || [])].join(','),
+    AvailThu: [...(t.avail?.Thursday || [])].join(','),
+    AvailFri: [...(t.avail?.Friday || [])].join(','),
+    LastCoverageDate: t.lastCoverageDate || null,
+    TotalCoverages: t.totalCoverages || 0,
+  };
+}
+
+function spToTeacher(item) {
+  const parseAvail = (str) => (str || '').split(',').map(Number).filter(n => n > 0);
+  return {
+    id: String(item.id || item.Id),
+    name: item.Name || item.Title || '',
+    tier: item.Tier || '1',
+    highAvail: item.HighAvail || false,
+    excluded: item.Excluded || false,
+    avail: {
+      Monday: parseAvail(item.AvailMon),
+      Tuesday: parseAvail(item.AvailTue),
+      Wednesday: parseAvail(item.AvailWed),
+      Thursday: parseAvail(item.AvailThu),
+      Friday: parseAvail(item.AvailFri),
+    },
+    lastCoverageDate: item.LastCoverageDate ? item.LastCoverageDate.slice(0,10) : '',
+    previousCoverageDate: '',
+    totalCoverages: item.TotalCoverages || 0,
+  };
+}
+
+function logEntryToSP(e) {
+  return {
+    Title: `${e.date}||${e.absentTeacher}||${e.period}`,
+    Date: e.date,
+    AbsentTeacher: e.absentTeacher,
+    Period: e.period,
+    CourseName: e.courseName || '',
+    SectionNumber: e.sectionNumber || '',
+    RoomNumber: e.roomNumber || '',
+    CoveringTeacher: e.coveringTeacher || '',
+    ManualOverride: e.manualOverride || false,
+  };
+}
+
+function spToLogEntry(item) {
+  return {
+    _spId: item.id || item.Id,
+    date: item.Date ? item.Date.slice(0,10) : '',
+    absentTeacher: item.AbsentTeacher || '',
+    period: item.Period || 0,
+    courseName: item.CourseName || '',
+    sectionNumber: item.SectionNumber || '',
+    roomNumber: item.RoomNumber || '',
+    coveringTeacher: item.CoveringTeacher || '',
+    manualOverride: item.ManualOverride || false,
+    absType: item.AbsType || 'normal',
+  };
+}
+
+function absenceToSP(dateStr, a) {
+  return {
+    Title: `${dateStr}||${a.teacher}||${a.period}`,
+    Date: dateStr,
+    Teacher: a.teacher,
+    Period: a.period,
+    CourseName: a.course || '',
+    Section: a.section || '',
+    Room: a.room || '',
+    AbsType: a.absType || 'normal',
+  };
+}
+
+function spToAbsence(item) {
+  return {
+    teacher: item.Teacher || '',
+    period: item.Period || 0,
+    course: item.CourseName || '',
+    section: item.Section || '',
+    room: item.Room || '',
+    absType: item.AbsType || 'normal',
+    noCoverage: item.AbsType === 'skip',
+  };
+}
+
+// ── Loading indicator ────────────────────────────────
+
+function showLoading(msg) {
+  let el = document.getElementById('sp-loading');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'sp-loading';
+    el.style.cssText = 'position:fixed;bottom:20px;right:20px;background:var(--navy);color:white;padding:10px 16px;border-radius:8px;font-size:12px;z-index:9999;display:flex;align-items:center;gap:8px;box-shadow:var(--shadow-md)';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = `<div class="spinner"></div> ${msg}`;
+  el.style.display = 'flex';
+}
+
+function hideLoading() {
+  const el = document.getElementById('sp-loading');
+  if (el) el.style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════════
+//  DATA LAYER
+//  These functions are the only ones the app calls.
+//  In 'local' mode they use localStorage.
+//  In 'sharepoint' mode they call SharePoint REST.
+// ═══════════════════════════════════════════════════════
+
+const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
+const PERIODS = [1,2,3,4,5,6,7];
+
+function getData(key, def) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; }
+  catch { return def; }
+}
+function setData(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+}
+
+// ── Label helpers ────────────────────────────────────
+// Coverage labels are stored as strings on log entries: 'Outside Sub', 'Outside Sub 1',
+// 'Outside Sub 2', '⚠ UNASSIGNED', or a real teacher's name (optionally with ' (Emergency)').
+// Use these helpers everywhere instead of raw .includes() so casing / glyph changes
+// don't silently break filters. Both checks are case-insensitive and null-safe.
+function isOutsideSub(label) {
+  return !!label && /outside sub/i.test(label);
+}
+function isUnassigned(label) {
+  return !!label && /unassigned/i.test(label);
+}
+function isSpecialLabel(label) {
+  return isOutsideSub(label) || isUnassigned(label);
+}
+
+// ── Roster ───────────────────────────────────────────
+
+function getRoster() {
+  if (STORAGE_MODE === 'local') return getData('cs_roster', []);
+  // SharePoint: return cached version (loaded async on init)
+  return _spCache.roster || [];
+}
+
+async function getRosterAsync() {
+  if (STORAGE_MODE === 'local') return getRoster();
+  showLoading('Loading roster...');
+  try {
+    const items = await spGet('Teachers');
+    _spCache.roster = items.map(spToTeacher);
+    return _spCache.roster;
+  } finally { hideLoading(); }
+}
+
+function setRoster(r) {
+  if (STORAGE_MODE === 'local') { setData('cs_roster', r); return; }
+  // SharePoint writes are handled individually via saveTeacherSP / deleteTeacherSP
+  _spCache.roster = r;
+}
+
+async function saveTeacherSP(teacher) {
+  if (STORAGE_MODE === 'local') return;
+  showLoading('Saving teacher...');
+  try {
+    const item = teacherToSP(teacher);
+    if (teacher._spId) {
+      await spPatch('Teachers', teacher._spId, item);
+    } else {
+      const created = await spPost('Teachers', item);
+      teacher._spId = created.id || created.Id;
+    }
+  } finally { hideLoading(); }
+}
+
+async function deleteTeacherSP(spId) {
+  if (STORAGE_MODE === 'local') return;
+  showLoading('Deleting teacher...');
+  try { await spDelete('Teachers', spId); }
+  finally { hideLoading(); }
+}
+
+// ── Log ──────────────────────────────────────────────
+
+function getLog() {
+  if (STORAGE_MODE === 'local') return getData('cs_log', []);
+  return _spCache.log || [];
+}
+
+async function getLogAsync() {
+  if (STORAGE_MODE === 'local') return getLog();
+  showLoading('Loading log...');
+  try {
+    const items = await spGet('CoverageLog');
+    _spCache.log = items.map(spToLogEntry);
+    return _spCache.log;
+  } finally { hideLoading(); }
+}
+
+function setLog(l) {
+  if (STORAGE_MODE === 'local') { setData('cs_log', l); return; }
+  _spCache.log = l;
+  // Writes handled via appendLogEntriesSP / updateLogEntrySP
+}
+
+async function appendLogEntriesSP(entries) {
+  if (STORAGE_MODE === 'local') return;
+  showLoading('Saving assignments...');
+  try {
+    for (const entry of entries) {
+      const created = await spPost('CoverageLog', logEntryToSP(entry));
+      entry._spId = created.id || created.Id;
+    }
+  } finally { hideLoading(); }
+}
+
+async function updateLogEntrySP(entry) {
+  if (STORAGE_MODE === 'local') return;
+  if (!entry._spId) return;
+  showLoading('Updating assignment...');
+  try { await spPatch('CoverageLog', entry._spId, logEntryToSP(entry)); }
+  finally { hideLoading(); }
+}
+
+async function deleteLogEntriesSP(entries) {
+  if (STORAGE_MODE === 'local') return;
+  showLoading('Removing assignments...');
+  try {
+    for (const entry of entries) {
+      if (entry._spId) await spDelete('CoverageLog', entry._spId);
+    }
+  } finally { hideLoading(); }
+}
+
+// ── Absences ─────────────────────────────────────────
+
+function getAbsencesByDate(dateStr) {
+  if (STORAGE_MODE === 'local') return getData('cs_absences_' + dateStr, []);
+  return (_spCache.absences || []).filter(a => a._date === dateStr);
+}
+
+async function getAbsencesByDateAsync(dateStr) {
+  if (STORAGE_MODE === 'local') return getAbsencesByDate(dateStr);
+  showLoading('Loading absences...');
+  try {
+    const items = await spGet('Absences', `Date eq '${dateStr}'`);
+    return items.map(item => ({ ...spToAbsence(item), _date: dateStr, _spId: item.id || item.Id }));
+  } finally { hideLoading(); }
+}
+
+async function saveAbsencesForDateSP(dateStr, absences) {
+  if (STORAGE_MODE === 'local') return;
+  showLoading('Saving absences...');
+  try {
+    // Delete existing absences for this date then re-write
+    const existing = await spGet('Absences', `Date eq '${dateStr}'`);
+    for (const item of existing) await spDelete('Absences', item.id || item.Id);
+    for (const a of absences) await spPost('Absences', absenceToSP(dateStr, a));
+  } finally { hideLoading(); }
+}
+
+// ── Schedule ─────────────────────────────────────────
+
+async function loadScheduleFromSP() {
+  if (STORAGE_MODE === 'local') return;
+  showLoading('Loading schedule...');
+  try {
+    const items = await spGet('Schedule');
+    scheduleData = {};
+    items.forEach(item => {
+      const teacher = item.Teacher || '';
+      if (!teacher) return;
+      if (!scheduleData[teacher]) scheduleData[teacher] = [];
+      scheduleData[teacher].push({
+        day: item.Day || '',
+        period: item.Period || 0,
+        courseName: item.CourseName || '',
+        section: item.Section || '',
+        room: item.Room || '',
+      });
+    });
+    const count = Object.keys(scheduleData).length;
+    if (count > 0) document.getElementById('schedule-status').textContent = `✓ ${count} teachers loaded`;
+  } finally { hideLoading(); }
+}
+
+async function saveScheduleToSP() {
+  if (STORAGE_MODE === 'local') return;
+  showLoading('Saving schedule...');
+  try {
+    // Clear and rewrite entire schedule
+    const existing = await spGet('Schedule');
+    for (const item of existing) await spDelete('Schedule', item.id || item.Id);
+    for (const [teacher, classes] of Object.entries(scheduleData)) {
+      for (const c of classes) {
+        await spPost('Schedule', {
+          Title: `${teacher}||${c.day}||${c.period}`,
+          Teacher: teacher, Day: c.day, Period: c.period,
+          CourseName: c.courseName, Section: c.section, Room: c.room,
+        });
+      }
+    }
+  } finally { hideLoading(); }
+}
+
+// ── SP Cache (in-memory store for sharepoint mode) ───
+const _spCache = { roster: [], log: [], absences: [] };
+
+// ── App init (loads all data on startup) ─────────────
+async function initData() {
+  if (STORAGE_MODE === 'sharepoint') {
+    if (!SP_SITE_URL) {
+      alert('SP_SITE_URL is not set. Please set it at the top of the script before switching to SharePoint mode.');
+      return;
+    }
+    showLoading('Connecting to SharePoint...');
+    try {
+      await Promise.all([getRosterAsync(), getLogAsync(), loadScheduleFromSP()]);
+    } catch(e) {
+      alert('Could not connect to SharePoint: ' + e.message + '\n\nFalling back to local mode.');
+    } finally { hideLoading(); }
+  } else {
+    loadScheduleFromStorage();
+    loadRoomChartFromStorage();
+    loadSeniorClassesFlag();
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  NAVIGATION
+// ═══════════════════════════════════════════════════════
+
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+  // Main nav: run, roster, log, summary
+  const mainMap = { run:0, roster:1, log:2, summary:3 };
+  if (mainMap[name] !== undefined)
+    document.querySelectorAll('#nav-main .nav-btn')[mainMap[name]].classList.add('active');
+  // Data nav: schedule, roomchart (index 0, 1)
+  const dataMap = { schedule:0, roomchart:1 };
+  if (dataMap[name] !== undefined)
+    document.querySelectorAll('#nav-data .nav-btn')[dataMap[name]].classList.add('active');
+  // The sync report belongs to the moment you sync, not to the roster screen
+  if (name !== 'roster') {
+    const rep = document.getElementById('derive-report');
+    if (rep) rep.style.display = 'none';
+  }
+  if (name === 'roster') renderRoster();
+  if (name === 'log') renderLog();
+  if (name === 'summary') { renderSummary(); renderWeeklyGrid(); }
+  if (name === 'override') { document.getElementById('override-date').value = todayStr(); }
+  if (name === 'schedule') renderScheduleInspector();
+  if (name === 'roomchart') renderRoomChartInspector();
+}
+
+function todayStr() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function defaultDateStr() {
+  const now = new Date();
+  const base = new Date(now);
+  if (now.getHours() >= 13) {
+    base.setDate(base.getDate() + 1);
+  }
+  // Skip to Monday if landing on Saturday (6) or Sunday (0)
+  const dow = base.getDay();
+  if (dow === 6) base.setDate(base.getDate() + 2);
+  else if (dow === 0) base.setDate(base.getDate() + 1);
+  // Use local date parts to avoid UTC timezone shift
+  const y = base.getFullYear();
+  const m = String(base.getMonth() + 1).padStart(2, '0');
+  const d = String(base.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+window.addEventListener('beforeunload', () => {
+  const dateStr = document.getElementById('run-date')?.value;
+  if (dateStr) {
+    saveAbsencesForDate(dateStr);
+    const count = parseInt(document.getElementById('outside-sub-count')?.value) || 0;
+    setData('cs_outsidesubcount_' + dateStr, count);
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════
+
+document.addEventListener('DOMContentLoaded', async () => {
+  const startDate = defaultDateStr();
+  document.getElementById('run-date').value = startDate;
+  document.getElementById('override-date').value = todayStr();
+  document.getElementById('reset-date').value = todayStr();
+  document.getElementById('weekly-grid-date').value = todayStr();
+  buildAvailGrid();
+  await initData();
+  renderAbsencesTable();
+  renderRoster();
+});
+
+// ═══════════════════════════════════════════════════════
+//  ABSENCES TABLE
+// ═══════════════════════════════════════════════════════
+
+// Per-date absence storage
+// absencesByDate: { "2026-03-04": [ {teacher, period, course, section, room, noCoverage, absType}, ... ] }
+// Note: getAbsencesByDate is defined in the STORAGE ADAPTER section above (line ~1412).
+// In local mode it reads from localStorage; in sharepoint mode it reads from the in-memory cache.
+// The DOM-read version is getAbsences() (line ~1693), which returns a different shape:
+//   { absentTeacher, period, courseName, sectionNumber, roomNumber, absType }
+
+function saveAbsencesForDate(dateStr) {
+  const rows = document.querySelectorAll('#absences-tbody tr');
+  const absences = [];
+  rows.forEach(row => {
+    const sel = row.querySelector('.abs-teacher');
+    const custom = row.querySelector('.abs-teacher-custom');
+    if (!sel) return;
+    const teacher = sel.value === '__custom__' ? (custom ? custom.value.trim() : '') : sel.value;
+    const period = parseInt(row.querySelector('.abs-period')?.value);
+    const course = row.querySelector('.abs-course')?.value.trim() || '';
+    const section = row.querySelector('.abs-section')?.value.trim() || '';
+    const room = row.querySelector('.abs-room')?.value.trim() || '';
+    const absType = row.querySelector('.abs-type')?.value || 'normal';
+    if (teacher) absences.push({ teacher, period, course, section, room, noCoverage: absType === 'skip', absType });
+  });
+  setData('cs_absences_' + dateStr, absences);
+}
+
+function loadAbsencesForDate(dateStr) {
+  const tbody = document.getElementById('absences-tbody');
+  tbody.innerHTML = '';
+  const saved = getAbsencesByDate(dateStr);
+  if (saved.length > 0) {
+    saved.forEach(a => addAbsenceRowWithData(a.teacher, a.period, a.course, a.section, a.room, a.noCoverage, a.absType));
+  } else {
+    addAbsenceRow();
+  }
+}
+
+let currentAbsenceDate = null;
+
+function onDateChange() {
+  const newDate = document.getElementById('run-date').value;
+  if (!newDate) return;
+  // Save current absences and outside sub count before switching
+  if (currentAbsenceDate && currentAbsenceDate !== newDate) {
+    saveAbsencesForDate(currentAbsenceDate);
+    const count = document.getElementById('outside-sub-count').value;
+    setData('cs_outsidesubcount_' + currentAbsenceDate, parseInt(count) || 0);
+  }
+  currentAbsenceDate = newDate;
+  loadAbsencesForDate(newDate);
+  // Restore outside sub count for new date
+  const saved = getData('cs_outsidesubcount_' + newDate, null);
+  document.getElementById('outside-sub-count').value = saved !== null ? saved : 0;
+}
+
+function renderAbsencesTable() {
+  const dateStr = document.getElementById('run-date').value;
+  currentAbsenceDate = dateStr;
+  loadAbsencesForDate(dateStr);
+  // Restore outside sub count for initial date
+  const saved = getData('cs_outsidesubcount_' + dateStr, null);
+  document.getElementById('outside-sub-count').value = saved !== null ? saved : 0;
+}
+
+function addAbsenceRow() {
+  const names = getAllTeacherNames();
+  const tbody = document.getElementById('absences-tbody');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td>
+      <select class="abs-teacher" style="width:100%">
+        <option value="">Select teacher...</option>
+        ${names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}
+        <option value="__custom__">Type name manually...</option>
+      </select>
+      <input class="abs-teacher-custom" type="text" placeholder="Enter name exactly" style="display:none;margin-top:4px" />
+    </td>
+    <td>
+      <select class="abs-period" style="width:100%">
+        ${PERIODS.map(p => `<option value="${p}">${p}</option>`).join('')}
+      </select>
+    </td>
+    <td><input class="abs-course" type="text" placeholder="Course name" /></td>
+    <td><input class="abs-section" type="text" placeholder="01" style="width:80px" /></td>
+    <td><input class="abs-room" type="text" placeholder="204" style="width:60px" /></td>
+    <td>
+      <select class="abs-type" style="width:100%;font-size:12px;padding:4px 6px">
+        <option value="normal">Staff</option>
+        <option value="tardy">Tardy</option>
+        <option value="outside">Outside Sub</option>
+        <option value="skip">Skip</option>
+      </select>
+    </td>
+    <td>
+      <div style="display:flex;gap:4px">
+        <button class="btn btn-ghost btn-sm" onclick="duplicateAbsenceRow(this)" title="Duplicate row">⧉</button>
+        <button class="btn btn-danger btn-sm" onclick="this.closest('tr').remove()">✕</button>
+      </div>
+    </td>
+  `;
+  tbody.appendChild(tr);
+
+  // Handle custom name toggle
+  const sel = tr.querySelector('.abs-teacher');
+  const custom = tr.querySelector('.abs-teacher-custom');
+  sel.addEventListener('change', () => {
+    custom.style.display = sel.value === '__custom__' ? 'block' : 'none';
+  });
+  const typeSelBlank = tr.querySelector('.abs-type');
+  if (typeSelBlank) typeSelBlank.addEventListener('change', () => { tr.style.opacity = typeSelBlank.value === 'skip' ? '0.5' : '1'; });
+}
+
+function getAbsences() {
+  const rows = document.querySelectorAll('#absences-tbody tr');
+  const absences = [];
+  rows.forEach(row => {
+    const sel = row.querySelector('.abs-teacher');
+    const custom = row.querySelector('.abs-teacher-custom');
+    let teacher = sel.value === '__custom__' ? custom.value.trim() : sel.value;
+    const period = parseInt(row.querySelector('.abs-period').value);
+    const course = row.querySelector('.abs-course').value.trim();
+    const section = row.querySelector('.abs-section').value.trim();
+    const room = row.querySelector('.abs-room').value.trim();
+    const absType2 = row.querySelector('.abs-type')?.value || 'normal';
+    if (teacher && absType2 !== 'skip' && (course || absType2 === 'outside')) {
+      absences.push({ absentTeacher: teacher, period, courseName: course, sectionNumber: section, roomNumber: room, absType: absType2 });
+    }
+  });
+  return absences;
+}
+
+// ═══════════════════════════════════════════════════════
+//  ASSIGNMENT ENGINE
+// ═══════════════════════════════════════════════════════
+
+function getWeekBounds(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDay(); // 0=Sun
+  const mon = new Date(d); mon.setDate(d.getDate() - ((day + 6) % 7));
+  const fri = new Date(mon); fri.setDate(mon.getDate() + 4);
+  return { start: mon.toISOString().slice(0,10), end: fri.toISOString().slice(0,10) };
+}
+
+function getWeeklyCounts(dateStr) {
+  const log = getLog();
+  const { start, end } = getWeekBounds(dateStr);
+  const counts = {};
+  log.forEach(e => {
+    if (e.date >= start && e.date <= end && e.coveringTeacher &&
+        !isSpecialLabel(e.coveringTeacher)) {
+      const name = e.coveringTeacher.replace(' (Emergency)', '').trim();
+      counts[name] = (counts[name] || 0) + 1;
+    }
+  });
+  return counts;
+}
+
+function getWeekAssigned(dateStr) {
+  const log = getLog();
+  const { start, end } = getWeekBounds(dateStr);
+  const assigned = new Set();
+  log.forEach(e => {
+    if (e.date !== dateStr && e.date >= start && e.date <= end &&
+        e.coveringTeacher && !isSpecialLabel(e.coveringTeacher)) {
+      assigned.add(e.coveringTeacher.replace(' (Emergency)', '').trim());
+    }
+  });
+  return assigned;
+}
+
+function getExistingAssignments(dateStr) {
+  return getLog().filter(e => e.date === dateStr);
+}
+
+function priorityScore(teacher, weeklyCount) {
+  const tier = teacher.tier;
+  const wk = weeklyCount;
+  const bonus = teacher.highAvail ? -0.5 : 0;
+  if (tier === '1') return wk * 2 + bonus;
+  if (tier === '2') return (wk < 2 ? wk * 2 + 1 : 6) + bonus;
+  if (tier === '3') return wk * 2 + 5 + bonus;
+  return 99;
+}
+
+function parseAvail(teacher, dayName) {
+  const a = teacher.avail[dayName];
+  if (!a) return new Set();
+  return a instanceof Set ? a : new Set(a);
+}
+
+function assignCoverage(absences, dateStr, outsideSubCount) {
+  const roster = getRoster();
+  const dayName = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
+  const weeklyCounts = getWeeklyCounts(dateStr);
+  const weekAssigned = getWeekAssigned(dateStr);
+  const absentTeachers = new Set(absences.filter(a => a.absType !== 'tardy').map(a => a.absentTeacher));
+
+  // Load existing assignments for this date (locking)
+  const existing = getExistingAssignments(dateStr);
+  const existingKeys = new Set(existing.map(e => `${e.absentTeacher}||${e.period}`));
+  const existingTeachers = new Set(
+    existing
+      .filter(e => !isSpecialLabel(e.coveringTeacher))
+      .map(e => e.coveringTeacher.replace(' (Emergency)', '').trim())
+  );
+
+  // Detect conflicts: covering teacher now also absent
+  const conflicts = existing.filter(e => {
+    const ct = e.coveringTeacher.replace(' (Emergency)', '').trim();
+    return absentTeachers.has(ct) && !isOutsideSub(e.coveringTeacher);
+  });
+  const conflictKeys = new Set(conflicts.map(e => `${e.absentTeacher}||${e.period}`));
+  // Outside sub assignments are soft (re-assignable on re-run) unless manualOverride:true
+  const lockedExisting = existing.filter(e => {
+    if (conflictKeys.has(`${e.absentTeacher}||${e.period}`)) return false;
+    const entryIsOutsideSub = isOutsideSub(e.coveringTeacher);
+    if (entryIsOutsideSub && !e.manualOverride) return false; // soft — re-run can reassign
+    return true;
+  });
+  const lockedKeys = new Set(lockedExisting.map(e => `${e.absentTeacher}||${e.period}`));
+  const lockedTeachers = new Set(
+    lockedExisting
+      .filter(e => !isSpecialLabel(e.coveringTeacher))
+      .map(e => e.coveringTeacher.replace(' (Emergency)', '').trim())
+  );
+
+  const usedToday = new Set([...lockedTeachers]);
+  const assignments = [...lockedExisting];
+  const unassigned = [];
+  const newEntries = [];
+
+  // Determine outside sub periods
+  const outsideSubPeriodMap = {};
+  if (outsideSubCount > 0) {
+    const periodCounts = {};
+    absences.forEach(ab => {
+      if (lockedKeys.has(`${ab.absentTeacher}||${ab.period}`)) return;
+      const p = ab.period;
+      const cnt = roster.filter(t =>
+        t.tier !== 'E' && (t.avail[dayName] ? (t.avail[dayName] instanceof Set ? t.avail[dayName] : new Set(t.avail[dayName])) : new Set()).has(p)
+      ).length;
+      periodCounts[p] = (periodCounts[p] || 0) + cnt;
+    });
+    const sortedPeriods = [...new Set(absences.map(a => a.period))].sort((a,b) => (periodCounts[a]||0) - (periodCounts[b]||0));
+    const unlockedAbsences = absences.filter(ab => !lockedKeys.has(`${ab.absentTeacher}||${ab.period}`));
+    unlockedAbsences.filter(ab => ab.absType === 'outside').forEach(ab => {
+      outsideSubPeriodMap[`${ab.absentTeacher}||${ab.period}`] = outsideSubCount > 1 ? 'Outside Sub 1' : 'Outside Sub';
+    });
+    // MS detection: section ID starts with 6, 7, 8, or contains 6/7
+    const isMS = (ab) => {
+      const sec = (ab.sectionNumber || '').trim();
+      return /^[678][-\/]/i.test(sec) || /^[678]\b/.test(sec) || /6\/7/i.test(sec);
+    };
+    // Sort: hardest to cover first; within same period, HS before MS
+    const autoSorted = unlockedAbsences.filter(ab => ab.absType !== 'outside').sort((a,b) => {
+      const pa = periodCounts[a.period] || 0;
+      const pb = periodCounts[b.period] || 0;
+      if (pa !== pb) return pa - pb;
+      return (isMS(a) ? 1 : 0) - (isMS(b) ? 1 : 0); // HS first, MS last
+    });
+    const subUsage = {};
+    for (let i = 0; i < outsideSubCount; i++) subUsage[i] = new Set();
+    // Pre-populate from existing outside sub assignments that will survive this re-run
+    // (i.e. their absence row is still present AND they won't be re-evaluated)
+    const currentAbsenceKeys = new Set(absences.map(ab => `${ab.absentTeacher}||${ab.period}`));
+    existing.forEach(e => {
+      if (!isOutsideSub(e.coveringTeacher)) return;
+      // Only block this period if this entry is NOT being re-evaluated in this run
+      const k = `${e.absentTeacher}||${e.period}`;
+      if (currentAbsenceKeys.has(k)) return; // will be re-evaluated, don't pre-block
+      const label = e.coveringTeacher.trim();
+      const match = label.match(/Outside Sub\s*(\d+)?/i);
+      if (!match) return;
+      const subIdx = match[1] ? parseInt(match[1]) - 1 : 0;
+      if (subUsage[subIdx]) subUsage[subIdx].add(e.period);
+    });
+    autoSorted.forEach(absence => {
+      const k = `${absence.absentTeacher}||${absence.period}`;
+      if (outsideSubPeriodMap[k]) return;
+      for (let i = 0; i < outsideSubCount; i++) {
+        if (!subUsage[i].has(absence.period)) {
+          outsideSubPeriodMap[k] = outsideSubCount > 1 ? `Outside Sub ${i+1}` : 'Outside Sub';
+          subUsage[i].add(absence.period);
+          break;
+        }
+      }
+    });
+  }
+
+  // Assign new absences
+  absences.forEach(ab => {
+    const key = `${ab.absentTeacher}||${ab.period}`;
+    if (lockedKeys.has(key)) return; // already locked
+
+    // Outside sub?
+    if (outsideSubPeriodMap[`${ab.absentTeacher}||${ab.period}`]) {
+      const entry = { ...ab, coveringTeacher: outsideSubPeriodMap[`${ab.absentTeacher}||${ab.period}`] };
+      assignments.push(entry);
+      newEntries.push(entry);
+      return;
+    }
+
+    // Find eligible teachers
+    const dayAvail = (t) => {
+      const a = t.avail[dayName];
+      if (!a) return new Set();
+      return a instanceof Set ? a : new Set(a);
+    };
+    // A teacher is eligible for a period if it's in their avail grid OR it's a temp period for that day
+    const isEligibleForPeriod = (t, period) =>
+      dayAvail(t).has(period) || isTempPeriod(t, period, dayName);
+
+    let eligible = roster.filter(t =>
+      t.tier !== 'E' &&
+      isEligibleForPeriod(t, ab.period) &&
+      !t.excluded &&
+      !usedToday.has(t.name) &&
+      !absentTeachers.has(t.name)
+    );
+
+    eligible.sort((a, b) => {
+      const sa = priorityScore(a, weeklyCounts[a.name] || 0);
+      const sb = priorityScore(b, weeklyCounts[b.name] || 0);
+      // Deprioritize teachers who already covered earlier this week
+      const aWeek = weekAssigned.has(a.name) ? 10 : 0;
+      const bWeek = weekAssigned.has(b.name) ? 10 : 0;
+      // Deprioritize temporary periods (grade 12 free periods) - used last before emergency
+      const aTmp = isTempPeriod(a, ab.period, dayName) ? 8 : 0;
+      const bTmp = isTempPeriod(b, ab.period, dayName) ? 8 : 0;
+      // Capacity: remaining available periods this day (more capacity = lower score = picked sooner)
+      const aCapacity = dayAvail(a).size || 1;
+      const bCapacity = dayAvail(b).size || 1;
+      const aRemaining = -(aCapacity - (weeklyCounts[a.name] || 0));
+      const bRemaining = -(bCapacity - (weeklyCounts[b.name] || 0));
+      const aTotal = sa + aWeek + aTmp + aRemaining * 0.2;
+      const bTotal = sb + bWeek + bTmp + bRemaining * 0.2;
+      if (aTotal !== bTotal) return aTotal - bTotal;
+      const da = a.lastCoverageDate || '2000-01-01';
+      const db = b.lastCoverageDate || '2000-01-01';
+      if (da !== db) return da < db ? -1 : 1;
+      return (a.totalCoverages || 0) - (b.totalCoverages || 0);
+    });
+
+    if (eligible.length > 0) {
+      const chosen = eligible[0];
+      usedToday.add(chosen.name);
+      const wk = weeklyCounts[chosen.name] || 0;
+      const reason = `Tier ${chosen.tier} · ${wk} coverage${wk !== 1 ? 's' : ''} this week · Last: ${chosen.lastCoverageDate || 'never'} · Total: ${chosen.totalCoverages || 0}`;
+      const entry = { ...ab, coveringTeacher: chosen.name, assignReason: reason };
+      assignments.push(entry);
+      newEntries.push(entry);
+    } else {
+      // Tier E is a manual pool only. The person running coverage picks from it
+      // in Override, where free teachers are already grouped as Available.
+      const emergencyFree = roster.filter(t =>
+        t.tier === 'E' &&
+        dayAvail(t).has(ab.period) &&
+        !t.excluded &&
+        !usedToday.has(t.name) &&
+        !absentTeachers.has(t.name)
+      ).length;
+      const reason = emergencyFree
+        ? `No Tier 1-3 teacher free. ${emergencyFree} emergency option${emergencyFree !== 1 ? 's' : ''} in Override.`
+        : 'No eligible teachers found';
+      const entry = { ...ab, coveringTeacher: '⚠ UNASSIGNED', assignReason: reason };
+      assignments.push(entry);
+      newEntries.push(entry);
+      unassigned.push(ab);
+    }
+  });
+
+  return { assignments, newEntries, unassigned, conflicts, lockedCount: lockedExisting.length };
+}
+
+// ═══════════════════════════════════════════════════════
+//  RUN COVERAGE
+// ═══════════════════════════════════════════════════════
+
+async function runCoverage() {
+  const dateStr = document.getElementById('run-date').value;
+  if (!dateStr) { alert('Please select a date.'); return; }
+  saveAbsencesForDate(dateStr);
+  const outsideSubCount = parseInt(document.getElementById('outside-sub-count').value) || 0;
+  setData('cs_outsidesubcount_' + dateStr, outsideSubCount);
+  const absences = getAbsences();
+  if (absences.length === 0) { alert('Please add at least one absence row.'); return; }
+
+  const { assignments, newEntries, unassigned, conflicts, lockedCount } = assignCoverage(absences, dateStr, outsideSubCount);
+
+  // Update log (skip duplicates)
+  const log = getLog();
+  const existingKeys = new Set(log.filter(e => e.date === dateStr).map(e => `${e.absentTeacher}||${e.period}`));
+  const toAppend = [];
+  newEntries.forEach(entry => {
+    const key = `${entry.absentTeacher}||${entry.period}`;
+    if (!existingKeys.has(key)) {
+      const newEntry = { date: dateStr, ...entry };
+      log.push(newEntry);
+      toAppend.push(newEntry);
+      existingKeys.add(key);
+    }
+  });
+  setLog(log);
+  if (STORAGE_MODE === 'sharepoint') await appendLogEntriesSP(toAppend);
+
+  // Update roster - only for genuinely new log entries
+  await updateRosterAfterRun(toAppend, dateStr);
+
+  // Save absences to SP
+  if (STORAGE_MODE === 'sharepoint') {
+    const absenceRows = getAbsencesByDate(dateStr);
+    await saveAbsencesForDateSP(dateStr, absenceRows);
+  }
+
+  renderOutput(assignments, unassigned, conflicts, dateStr, lockedCount, outsideSubCount);
+  document.getElementById('output-area').style.display = 'block';
+  document.getElementById('output-area').scrollIntoView({ behavior: 'smooth' });
+}
+
+async function updateRosterAfterRun(newEntries, dateStr) {
+  const roster = getRoster();
+  const log = getLog();
+  // Find teachers already credited for this date (from previous runs)
+  const alreadyCredited = new Set(
+    log.filter(e => e.date === dateStr && e.coveringTeacher &&
+      !isSpecialLabel(e.coveringTeacher))
+      .map(e => e.coveringTeacher.replace(' (Emergency)', '').trim())
+  );
+  const toUpdate = [];
+  newEntries.forEach(entry => {
+    const ct = entry.coveringTeacher.replace(' (Emergency)', '').trim();
+    if (isSpecialLabel(ct)) return;
+    if (alreadyCredited.has(ct)) return; // already counted for this date
+    const teacher = roster.find(t => t.name === ct);
+    if (teacher) {
+      teacher.previousCoverageDate = teacher.lastCoverageDate;
+      teacher.lastCoverageDate = dateStr;
+      teacher.totalCoverages = (teacher.totalCoverages || 0) + 1;
+      toUpdate.push(teacher);
+    }
+  });
+  setRoster(roster);
+  if (STORAGE_MODE === 'sharepoint') {
+    for (const t of toUpdate) await saveTeacherSP(t);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  OUTPUT RENDERING
+// ═══════════════════════════════════════════════════════
+
+function renderOutput(assignments, unassigned, conflicts, dateStr, lockedCount, outsideSubCount) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const dayLong = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const dayShort = d.toLocaleDateString('en-US', { weekday: 'long', month: 'numeric', day: 'numeric' });
+
+  const byTeacher = {};
+  assignments.forEach(a => {
+    if (!byTeacher[a.absentTeacher]) byTeacher[a.absentTeacher] = [];
+    byTeacher[a.absentTeacher].push(a);
+  });
+
+  const rawEmailTemplate = localStorage.getItem('cs_email_template') || 'Hi, you have been assigned coverage for {{date}}. Rosters are attached. Please email any absences to FrontOffice@yorkprep.org - thank you!';
+  const savedEmailBody = rawEmailTemplate.replace(/\{\{date\}\}/g, dayShort);
+  const savedNotes = JSON.parse(localStorage.getItem('cs_notes_' + dateStr) || '{}');
+
+  const outputDoc = document.getElementById('output-doc');
+  outputDoc.innerHTML = '';
+
+  // Title
+  const title = document.createElement('h1');
+  title.textContent = 'Coverage Assignments — ' + dayLong;
+  outputDoc.appendChild(title);
+
+  // Email template box
+  const emailWrap = document.createElement('div');
+  emailWrap.className = 'output-email-template';
+  emailWrap.innerHTML = '<div class="output-email-label" style="display:flex;justify-content:space-between"><span>Email Body</span><span id="email-save-indicator" style="font-size:10px;color:var(--gray-400)">Auto-saved</span></div>';
+  const emailTA = document.createElement('textarea');
+  emailTA.id = 'email-template-text';
+  emailTA.rows = 3;
+  emailTA.style.cssText = 'width:100%;border:none;background:transparent;font-family:sans-serif;font-size:13px;color:var(--gray-800);resize:vertical;outline:none;margin-top:4px';
+  emailTA.value = savedEmailBody;
+  emailTA.oninput = function() { saveEmailTemplate(); };
+  emailWrap.appendChild(emailTA);
+  outputDoc.appendChild(emailWrap);
+
+  // Alerts
+  if (lockedCount > 0) {
+    const a = document.createElement('div');
+    a.className = 'alert alert-info';
+    a.textContent = lockedCount + ' existing assignment(s) locked in from previous run.';
+    outputDoc.appendChild(a);
+  }
+  if (conflicts.length > 0) {
+    const a = document.createElement('div');
+    a.className = 'alert alert-warn';
+    a.textContent = conflicts.length + ' conflict(s) detected and reassigned.';
+    outputDoc.appendChild(a);
+  }
+
+  // Split assignments: staff vs outside sub
+  var staffAssignments = assignments.filter(a => !isOutsideSub(a.coveringTeacher));
+  var outsideSubAssignments = assignments.filter(a => isOutsideSub(a.coveringTeacher));
+
+  // Group staff by absent teacher
+  var staffByTeacher = {};
+  staffAssignments.forEach(a => {
+    if (!staffByTeacher[a.absentTeacher]) staffByTeacher[a.absentTeacher] = [];
+    staffByTeacher[a.absentTeacher].push(a);
+  });
+
+  // Group outside sub assignments by which sub (Outside Sub 1, Outside Sub 2, Outside Sub)
+  var outsideSubByLabel = {};
+  outsideSubAssignments.forEach(a => {
+    var label = a.coveringTeacher;
+    if (!outsideSubByLabel[label]) outsideSubByLabel[label] = [];
+    outsideSubByLabel[label].push(a);
+  });
+
+  // Helper: render a block for an absent teacher's staff-covered periods
+  function renderTeacherBlock(teacher, periods) {
+    var teacherKey = 'teacher_' + teacher.replace(/[^a-z0-9]/gi, '_');
+    var teacherNote = savedNotes[teacherKey] || '';
+
+    var header = document.createElement('div');
+    header.className = 'output-absent-header';
+    header.textContent = 'For: ' + teacher;
+    outputDoc.appendChild(header);
+
+    var sp = document.createElement('div');
+    sp.style.height = '12px';
+    outputDoc.appendChild(sp);
+
+    var tNote = document.createElement('textarea');
+    tNote.rows = 1;
+    tNote.placeholder = 'Overall notes for ' + teacher + ' (optional)...';
+    tNote.value = teacherNote;
+    tNote.dataset.noteKey = teacherKey;
+    tNote.dataset.noteDate = dateStr;
+    tNote.style.cssText = 'width:calc(100% - 32px);margin:4px 0 10px 32px;padding:3px 8px;border:none;border-left:2px solid #6699cc;background:transparent;font-size:10px;font-style:italic;color:#4d6480;resize:none;outline:none;display:block;';
+    tNote.oninput = function() { saveSubPlanNote(this); };
+    outputDoc.appendChild(tNote);
+
+    periods.sort(function(a,b){ return a.period - b.period; }).forEach(function(a) {
+      var room = a.roomNumber ? ', Room ' + a.roomNumber.replace(/^Room\s*/i, '').trim() : '';
+      var section = a.sectionNumber ? ', ' + a.sectionNumber : '';
+      var unassigned = isUnassigned(a.coveringTeacher);
+
+      var periodDiv = document.createElement('div');
+      periodDiv.style.cssText = 'padding:4px 0;font-size:11px;margin-top:8px;' + (unassigned ? 'color:red;' : '');
+      var reasonAttr = a.assignReason ? ` class="assign-reason" data-reason="${esc(a.assignReason)}"` : '';
+      periodDiv.innerHTML = '<strong>Period ' + a.period + ':</strong> ' + a.courseName + section + room + ' - <strong><span' + reasonAttr + '>' + a.coveringTeacher + '</span></strong>';
+      outputDoc.appendChild(periodDiv);
+
+      var periodKey = 'period_' + teacher.replace(/[^a-z0-9]/gi, '_') + '_' + a.period;
+      var periodNote = savedNotes[periodKey] || '';
+      var pNote = document.createElement('textarea');
+      pNote.rows = 1;
+      pNote.placeholder = 'Notes for Period ' + a.period + ' (optional)...';
+      pNote.value = periodNote;
+      pNote.dataset.noteKey = periodKey;
+      pNote.dataset.noteDate = dateStr;
+      pNote.style.cssText = 'width:calc(100% - 32px);margin:4px 0 10px 32px;padding:3px 8px;border:none;border-left:2px solid #6699cc;background:transparent;font-size:10px;font-style:italic;color:#4d6480;resize:none;outline:none;display:block;';
+      pNote.oninput = function() { saveSubPlanNote(this); };
+      outputDoc.appendChild(pNote);
+    });
+
+    var spacer = document.createElement('div');
+    spacer.style.height = '20px';
+    outputDoc.appendChild(spacer);
+  }
+
+  // Render staff blocks
+  Object.entries(staffByTeacher).forEach(function(entry) {
+    renderTeacherBlock(entry[0], entry[1]);
+  });
+
+  // Render outside sub sections
+  if (outsideSubAssignments.length > 0) {
+    var divider = document.createElement('hr');
+    divider.className = 'divider';
+    outputDoc.appendChild(divider);
+
+    // Sort labels: Outside Sub, Outside Sub 1, Outside Sub 2
+    var subLabels = Object.keys(outsideSubByLabel).sort();
+    subLabels.forEach(function(label) {
+      var periods = outsideSubByLabel[label];
+
+      var subHeader = document.createElement('div');
+      subHeader.className = 'output-absent-header';
+      subHeader.style.color = 'var(--navy)';
+      subHeader.textContent = label;
+      outputDoc.appendChild(subHeader);
+
+      var sp = document.createElement('div');
+      sp.style.height = '8px';
+      outputDoc.appendChild(sp);
+
+      periods.sort(function(a,b){ return a.period - b.period; }).forEach(function(a) {
+        var room = a.roomNumber ? ', Room ' + a.roomNumber.replace(/^Room\s*/i, '').trim() : '';
+        var section = a.sectionNumber ? ', ' + a.sectionNumber : '';
+
+        var periodDiv = document.createElement('div');
+        periodDiv.style.cssText = 'padding:4px 0;font-size:11px;margin-top:8px;';
+        periodDiv.innerHTML = '<strong>Period ' + a.period + ':</strong> ' + a.courseName + section + room + ' (for ' + a.absentTeacher + ')';
+        outputDoc.appendChild(periodDiv);
+
+        var periodKey = 'outsub_' + label.replace(/\s/g,'_') + '_period_' + a.period + '_' + a.absentTeacher.replace(/[^a-z0-9]/gi,'_');
+        var teacherKey = 'teacher_' + a.absentTeacher.replace(/[^a-z0-9]/gi, '_');
+        var staffPeriodKey = 'period_' + a.absentTeacher.replace(/[^a-z0-9]/gi, '_') + '_' + a.period;
+        // Fallback: period-level note → teacher-level note → empty
+        var savedPeriodNote = savedNotes[periodKey] || '';
+        var fallbackNote = !savedPeriodNote ? (savedNotes[staffPeriodKey] || savedNotes[teacherKey] || '') : '';
+        var pNote = document.createElement('textarea');
+        pNote.rows = 1;
+        pNote.placeholder = 'Notes for Period ' + a.period + ' (optional)...';
+        pNote.value = savedPeriodNote || fallbackNote;
+        if (!savedPeriodNote && fallbackNote) pNote.style.color = 'var(--gray-400)'; // visual hint it's a fallback
+        pNote.dataset.noteKey = periodKey;
+        pNote.dataset.noteDate = dateStr;
+        pNote.style.cssText = 'width:calc(100% - 32px);margin:4px 0 10px 32px;padding:3px 8px;border:none;border-left:2px solid #6699cc;background:transparent;font-size:10px;font-style:italic;color:' + (!savedPeriodNote && fallbackNote ? 'var(--gray-400)' : '#4d6480') + ';resize:none;outline:none;display:block;';
+        pNote.addEventListener('focus', function() { this.style.color = '#4d6480'; }); // darken on edit
+        pNote.oninput = function() { this.style.color = '#4d6480'; saveSubPlanNote(this); };
+        outputDoc.appendChild(pNote);
+      });
+
+      var spacer = document.createElement('div');
+      spacer.style.height = '20px';
+      outputDoc.appendChild(spacer);
+    });
+  }
+
+  if (unassigned.length > 0) {
+    var warn = document.createElement('div');
+    warn.className = 'output-warning';
+    warn.textContent = unassigned.length + ' period(s) could not be assigned — manual intervention required.';
+    outputDoc.appendChild(warn);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  OUT ALL WEEK
+// ═══════════════════════════════════════════════════════
+
+function getWeekDatesFromDate(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const dow = d.getDay();
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
+  const dates = [];
+  const dayNames = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
+  for (let i = 0; i < 5; i++) {
+    const day = new Date(monday);
+    day.setDate(monday.getDate() + i);
+    dates.push({ dateStr: day.toISOString().slice(0,10), dayName: dayNames[i] });
+  }
+  return dates;
+}
+
+function openOutAllWeek() {
+  const dateStr = document.getElementById('run-date').value;
+  if (!dateStr) { alert('Please select a date first.'); return; }
+  const names = getAllTeacherNames();
+  const weekDates = getWeekDatesFromDate(dateStr);
+
+  // Build modal
+  let modal = document.getElementById('out-all-week-modal');
+  if (modal) modal.remove();
+
+  modal = document.createElement('div');
+  modal.id = 'out-all-week-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;display:flex;align-items:center;justify-content:center;';
+  modal.innerHTML = `
+    <div style="background:white;border-radius:12px;padding:28px;width:420px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,0.2)">
+      <div style="font-family:'DM Serif Display',serif;font-size:18px;color:var(--navy-dark);margin-bottom:4px">Out All Week</div>
+      <div style="font-size:12px;color:var(--gray-400);margin-bottom:20px">Adds this teacher's classes to each day they have them</div>
+      <div style="margin-bottom:16px">
+        <label style="font-size:12px;font-weight:600;color:var(--gray-600);display:block;margin-bottom:6px">Teacher</label>
+        <select id="oaw-teacher" style="width:100%;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:13px">
+          <option value="">Select teacher...</option>
+          ${names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}
+        </select>
+      </div>
+      <div style="margin-bottom:20px">
+        <label style="font-size:12px;font-weight:600;color:var(--gray-600);display:block;margin-bottom:8px">Days to include</label>
+        <div style="display:flex;flex-direction:column;gap:6px" id="oaw-days">
+          ${weekDates.map(d => `
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+              <input type="checkbox" class="oaw-day-check" data-date="${d.dateStr}" checked style="width:15px;height:15px" />
+              ${d.dayName} <span style="color:var(--gray-400);font-size:11px">${new Date(d.dateStr + 'T00:00:00').toLocaleDateString('en-US',{month:'numeric',day:'numeric'})}</span>
+            </label>`).join('')}
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('out-all-week-modal').remove()">Cancel</button>
+        <button class="btn btn-gold btn-sm" onclick="confirmOutAllWeek()">Add to Selected Days</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function confirmOutAllWeek() {
+  const teacher = document.getElementById('oaw-teacher').value;
+  if (!teacher) { alert('Please select a teacher.'); return; }
+
+  const checkedDays = document.querySelectorAll('.oaw-day-check:checked');
+  if (checkedDays.length === 0) { alert('Please select at least one day.'); return; }
+
+  const currentDate = document.getElementById('run-date').value;
+
+  checkedDays.forEach(dayEl => {
+    const dateStr = dayEl.dataset.date;
+    const d = new Date(dateStr + 'T00:00:00');
+    const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const dayName = dayNames[d.getDay()];
+
+    // Get teacher's classes for this day from schedule
+    const teacherClasses = scheduleData[teacher] || [];
+    const dayClasses = teacherClasses.filter(c => c.day === dayName);
+
+    if (dayClasses.length === 0) return; // no classes this day, skip
+
+    // Save current absences first if switching days
+    if (dateStr !== currentDate) {
+      saveAbsencesForDate(currentDate);
+    }
+
+    // Load existing absences for this date, add new ones, save
+    const existing = getAbsencesByDate(dateStr);
+    dayClasses.forEach(c => {
+      // avoid duplicates
+      const alreadyExists = existing.some(a => a.teacher === teacher && a.period === c.period);
+      if (!alreadyExists) {
+        const liveRoom = getRoomFromChart(c.section, c.day, c.period) || c.room;
+        existing.push({ teacher, period: c.period, course: c.courseName, section: c.section, room: liveRoom, noCoverage: false });
+      }
+    });
+    setData('cs_absences_' + dateStr, existing);
+  });
+
+  // Reload current date display
+  loadAbsencesForDate(currentDate);
+  document.getElementById('out-all-week-modal').remove();
+  showImportAlert('success', `${teacher} added to selected days.`);
+}
+
+function saveSubPlanNote(el) {
+  const dateStr = el.dataset.noteDate;
+  const key = el.dataset.noteKey;
+  const notes = JSON.parse(localStorage.getItem('cs_notes_' + dateStr) || '{}');
+  notes[key] = el.value;
+  localStorage.setItem('cs_notes_' + dateStr, JSON.stringify(notes));
+  // Auto-resize
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+
+function saveEmailTemplate() {
+  const el = document.getElementById('email-template-text');
+  if (!el) return;
+  // Retrieve the current dayShort from the run-date input so we can re-abstract it back to {{date}}
+  const dateStr = document.getElementById('run-date').value;
+  let valueToStore = el.value;
+  if (dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    const dayShort = d.toLocaleDateString('en-US', { weekday: 'long', month: 'numeric', day: 'numeric' });
+    // Replace the rendered date back with the placeholder so it stays dynamic
+    valueToStore = el.value.replace(new RegExp(dayShort.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '{{date}}');
+  }
+  localStorage.setItem('cs_email_template', valueToStore);
+  const indicator = document.getElementById('email-save-indicator');
+  if (indicator) {
+    indicator.textContent = 'Saved';
+    setTimeout(() => { indicator.textContent = 'Auto-saved'; }, 1500);
+  }
+}
+
+function copyFullAssignment() {
+  const doc = document.getElementById('output-doc');
+  if (!doc) return;
+
+  const htmlLines = [];
+  const textLines = [];
+
+  // Email template
+  const emailEl = doc.querySelector('#email-template-text');
+  if (emailEl) {
+    const emailText = emailEl.value.trim();
+    htmlLines.push(emailText + '<br><br>');
+    textLines.push(emailText, '');
+  }
+
+  // Walk through all children of output-doc
+  // Structure: absent-header div, spacer, textarea (teacher note), period divs, period textareas, spacer
+  const children = Array.from(doc.children);
+  let i = 0;
+  while (i < children.length) {
+    const el = children[i];
+    if (el.className === 'output-absent-header') {
+      const teacherName = el.textContent.trim();
+      htmlLines.push('<b>' + teacherName + '</b>');
+      textLines.push(teacherName);
+      i++;
+      // Skip spacer div
+      if (children[i] && children[i].tagName === 'DIV' && !children[i].className) i++;
+      // Teacher note textarea
+      if (children[i] && children[i].tagName === 'TEXTAREA' && children[i].value.trim()) {
+        htmlLines.push('<i>' + children[i].value.trim() + '</i>');
+        textLines.push(children[i].value.trim());
+        i++;
+      } else if (children[i] && children[i].tagName === 'TEXTAREA') {
+        i++;
+      }
+      htmlLines.push('<br>');
+      textLines.push('');
+      // Period divs and notes
+      while (i < children.length && children[i].className !== 'output-absent-header') {
+        const c = children[i];
+        if (c.tagName === 'DIV' && c.innerHTML.includes('<strong>Period')) {
+          const text = c.textContent.trim().replace(/\s+/g, ' ');
+          const mStaff = text.match(/^Period (\d+): (.+) - (.+)$/);
+          if (mStaff) {
+            htmlLines.push('<b>Period ' + mStaff[1] + ':</b> ' + mStaff[2] + ' - <b>' + mStaff[3] + '</b><br>');
+            textLines.push('Period ' + mStaff[1] + ': ' + mStaff[2] + ' - ' + mStaff[3]);
+          } else {
+            const pNum = (text.match(/^Period (\d+)/) || ['','?'])[1];
+            const rest = text.replace(/^Period \d+: /, '');
+            htmlLines.push('<b>Period ' + pNum + ':</b> ' + rest + '<br>');
+            textLines.push(text);
+          }
+        } else if (c.tagName === 'TEXTAREA' && c.value.trim()) {
+          htmlLines.push('<i style="color:#666;font-size:11px">' + c.value.trim() + '</i><br>');
+          textLines.push('  ' + c.value.trim());
+        }
+        i++;
+      }
+      htmlLines.push('<br>');
+      textLines.push('');
+    } else {
+      i++;
+    }
+  }
+
+  const htmlContent = htmlLines.join('\n');
+  const textContent = textLines.join('\n').trim();
+
+  // Use ClipboardItem to copy both HTML and plain text
+  try {
+    const htmlBlob = new Blob([htmlContent], { type: 'text/html' });
+    const textBlob = new Blob([textContent], { type: 'text/plain' });
+    navigator.clipboard.write([
+      new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })
+    ]).then(() => {
+      alert('Assignment copied! Paste into your email — bold formatting will be preserved.');
+    }).catch(() => {
+      // Fallback to plain text
+      navigator.clipboard.writeText(textContent).then(() => {
+        alert('Assignment copied to clipboard!');
+      });
+    });
+  } catch(e) {
+    navigator.clipboard.writeText(textContent).then(() => {
+      alert('Assignment copied to clipboard!');
+    });
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  ROSTER MANAGEMENT
+// ═══════════════════════════════════════════════════════
+
+let editingTeacherId = null;
+let availState = {}; // day -> Set of periods
+
+function buildAvailGrid() {
+  const container = document.getElementById('avail-grid');
+  container.innerHTML = '';
+  DAYS.forEach(day => {
+    availState[day] = new Set();
+    const row = document.createElement('div');
+    row.className = 'day-avail-row';
+    row.innerHTML = `<div class="day-label">${day.slice(0,3)}</div><div class="period-grid" id="avail-${day}"></div><button type="button" class="btn btn-ghost btn-sm avail-all" data-allday="${day}">All</button>`;
+    container.appendChild(row);
+    PERIODS.forEach(p => {
+      const btn = document.createElement('div');
+      btn.className = 'period-toggle';
+      btn.textContent = p;
+      btn.dataset.day = day;
+      btn.dataset.period = p;
+      btn.addEventListener('click', () => {
+        if (availState[day].has(p)) {
+          availState[day].delete(p);
+          btn.classList.remove('on');
+        } else {
+          availState[day].add(p);
+          btn.classList.add('on');
+        }
+      });
+      document.getElementById(`avail-${day}`).appendChild(btn);
+    });
+    // Toggles the whole day on or off, for staff who are free all day
+    row.querySelector('.avail-all').addEventListener('click', () => {
+      const toggles = [...document.querySelectorAll(`.period-toggle[data-day="${day}"]`)];
+      const allOn = availState[day].size === PERIODS.length;
+      availState[day] = allOn ? new Set() : new Set(PERIODS);
+      toggles.forEach(b => b.classList.toggle('on', !allOn));
+    });
+  });
+}
+
+function openTeacherModal(id) {
+  editingTeacherId = id || null;
+  // Reset avail state
+  DAYS.forEach(day => {
+    availState[day] = new Set();
+    document.querySelectorAll(`[data-day="${day}"]`).forEach(btn => btn.classList.remove('on'));
+  });
+
+  document.getElementById('teacher-modal-title').textContent = id ? 'Edit Teacher' : 'Add Teacher';
+  document.getElementById('t-name').value = '';
+  document.getElementById('t-tier').value = '1';
+  document.getElementById('t-high-avail').value = '';
+  document.getElementById('t-excluded').value = '';
+  document.getElementById('t-last-date').value = '';
+  document.getElementById('t-total').value = '0';
+
+  if (id) {
+    const roster = getRoster();
+    const t = roster.find(r => r.id === id);
+    if (t) {
+      document.getElementById('t-name').value = t.name;
+      document.getElementById('t-tier').value = t.tier;
+      document.getElementById('t-high-avail').value = t.highAvail || '';
+      document.getElementById('t-excluded').value = t.excluded ? 'Y' : '';
+      document.getElementById('t-last-date').value = t.lastCoverageDate || '';
+      document.getElementById('t-total').value = t.totalCoverages || 0;
+      // Restore avail
+      DAYS.forEach(day => {
+        const periods = t.avail[day] || new Set();
+        const set = new Set(periods);
+        availState[day] = set;
+        document.querySelectorAll(`[data-day="${day}"]`).forEach(btn => {
+          if (set.has(parseInt(btn.dataset.period))) btn.classList.add('on');
+        });
+      });
+    }
+  }
+
+  document.getElementById('teacher-modal').classList.add('open');
+}
+
+function closeTeacherModal() {
+  document.getElementById('teacher-modal').classList.remove('open');
+  editingTeacherId = null;
+}
+
+async function saveTeacher() {
+  const name = document.getElementById('t-name').value.trim();
+  if (!name) { alert('Please enter a teacher name.'); return; }
+
+  const avail = {};
+  DAYS.forEach(day => { avail[day] = [...availState[day]]; });
+
+  const roster = getRoster();
+  const existing = editingTeacherId ? roster.find(r => r.id === editingTeacherId) : null;
+
+  const teacher = {
+    id: editingTeacherId || Date.now().toString(),
+    _spId: existing?._spId || null,
+    name,
+    tier: document.getElementById('t-tier').value,
+    highAvail: document.getElementById('t-high-avail').value === 'Y',
+    excluded: document.getElementById('t-excluded').value === 'Y',
+    avail,
+    lastCoverageDate: document.getElementById('t-last-date').value || '',
+    previousCoverageDate: '',
+    totalCoverages: parseInt(document.getElementById('t-total').value) || 0,
+  };
+
+  // Convert avail arrays to Sets for engine use
+  DAYS.forEach(day => { teacher.avail[day] = new Set(teacher.avail[day]); });
+
+  // When storing, convert Sets to arrays
+  const toStore = { ...teacher };
+  DAYS.forEach(day => { toStore.avail[day] = [...teacher.avail[day]]; });
+
+  if (editingTeacherId) {
+    const idx = roster.findIndex(r => r.id === editingTeacherId);
+    if (idx >= 0) roster[idx] = toStore;
+  } else {
+    roster.push(toStore);
+  }
+  setRoster(roster);
+  await saveTeacherSP(toStore);
+  closeTeacherModal();
+  renderRoster();
+  refreshAbsenceDropdowns();
+  populateAbtTeacherDropdown();
+}
+
+async function deleteTeacher(id) {
+  if (!confirm('Delete this teacher?')) return;
+  const roster = getRoster();
+  const teacher = roster.find(r => r.id === id);
+  if (teacher?._spId) await deleteTeacherSP(teacher._spId);
+  setRoster(roster.filter(r => r.id !== id));
+  renderRoster();
+  refreshAbsenceDropdowns();
+  populateAbtTeacherDropdown();
+}
+
+function recalculateCoveragesFromLog() {
+  if (!confirm('This will reset all coverage totals to match what is actually in the log. Continue?')) return;
+  const log = getLog();
+  const roster = getRoster();
+
+  // Count unique dates per covering teacher from the log
+  const dateSets = {};
+  log.forEach(e => {
+    if (!e.coveringTeacher || isSpecialLabel(e.coveringTeacher)) return;
+    const name = e.coveringTeacher.replace(' (Emergency)', '').trim();
+    if (!dateSets[name]) dateSets[name] = new Set();
+    dateSets[name].add(e.date);
+  });
+
+  roster.forEach(t => {
+    t.totalCoverages = dateSets[t.name] ? dateSets[t.name].size : 0;
+  });
+
+  setRoster(roster);
+  renderRoster();
+  alert('Coverage totals updated from log.');
+}
+
+let _rosSortCol = 'name';
+let _rosSortDir = 'asc';
+
+function sortRoster(col) {
+  if (_rosSortCol === col) { _rosSortDir = _rosSortDir === 'asc' ? 'desc' : 'asc'; }
+  else { _rosSortCol = col; _rosSortDir = ['total'].includes(col) ? 'desc' : 'asc'; }
+  renderRoster();
+}
+
+// Changing a tier from the roster row or the sync report, without the modal
+function setTierInline(id, tier) {
+  const roster = getRoster();
+  const t = roster.find(x => x.id === id);
+  if (!t) return;
+  t.tier = tier;
+  setRoster(roster);
+  if (STORAGE_MODE === 'sharepoint') saveTeacherSP(t);
+  renderRoster();
+}
+
+function setTierByName(name, tier) {
+  const roster = getRoster();
+  const t = roster.find(x => x.name === name);
+  if (!t) return;
+  t.tier = tier;
+  setRoster(roster);
+  if (STORAGE_MODE === 'sharepoint') saveTeacherSP(t);
+  renderRoster();
+}
+
+function tierSelectHtml(current, onchangeAttr) {
+  return `<select class="tier-inline" onchange="${onchangeAttr}">`
+    + ['1', '2', '3', 'E'].map(v =>
+        `<option value="${v}"${v === current ? ' selected' : ''}>${v === 'E' ? 'E' : v}</option>`
+      ).join('')
+    + `</select>`;
+}
+
+function renderRoster() {
+  const roster = getRoster();
+  const tbody = document.getElementById('roster-tbody');
+  const empty = document.getElementById('roster-empty');
+  document.getElementById('roster-count').textContent = roster.length;
+
+  if (roster.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  const tierOrder = { '1': 0, '2': 1, '3': 2, 'E': 3 };
+  const sorted = [...roster].sort((a, b) => {
+    let va, vb;
+    if (_rosSortCol === 'tier') { va = tierOrder[a.tier] ?? 9; vb = tierOrder[b.tier] ?? 9; }
+    else if (_rosSortCol === 'total') { va = a.totalCoverages || 0; vb = b.totalCoverages || 0; }
+    else if (_rosSortCol === 'avail') { va = a.highAvail ? 0 : 1; vb = b.highAvail ? 0 : 1; }
+    else if (_rosSortCol === 'last') { va = a.lastCoverageDate || ''; vb = b.lastCoverageDate || ''; }
+    else { va = a.name || ''; vb = b.name || ''; }
+    if (typeof va === 'number') {
+      if (va !== vb) return _rosSortDir === 'asc' ? va - vb : vb - va;
+      return (a.name || '').localeCompare(b.name || '');
+    }
+    if (va !== vb) return _rosSortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+    return (a.name || '').localeCompare(b.name || '');
+  });
+
+  ['name', 'tier', 'avail', 'last', 'total'].forEach(c => {
+    const el = document.getElementById('ros-sort-' + c);
+    if (el) el.textContent = _rosSortCol === c ? (_rosSortDir === 'asc' ? '▲' : '▼') : '⇅';
+  });
+
+  tbody.innerHTML = sorted.map(t => {
+    const avail = DAYS.map(day => {
+      const periods = [...(t.avail[day] || [])].sort((a,b)=>a-b);
+      return `<td style="font-size:11px;color:var(--gray-600)">${periods.join(',') || '—'}</td>`;
+    }).join('');
+    return `<tr>
+      <td style="font-weight:600">${esc(t.name)}</td>
+      <td>${tierSelectHtml(t.tier, `setTierInline('${t.id}', this.value)`)}</td>
+      <td>${t.highAvail ? '<span class="tag tag-green">Y</span>' : ''}</td>
+      <td>${t.excluded ? '<span class="tag tag-red">Y</span>' : ''}</td>
+      ${avail}
+      <td style="font-size:11px">${t.lastCoverageDate || '—'}</td>
+      <td style="font-weight:600">${t.totalCoverages || 0}</td>
+      <td>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-ghost btn-sm" onclick="openTeacherModal('${t.id}')">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteTeacher('${t.id}')">✕</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function getAllTeacherNames() {
+  const roster = getRoster();
+  const rosterNames = roster.map(t => t.name);
+  const scheduleNames = Object.keys(scheduleData);
+  return [...new Set([...rosterNames, ...scheduleNames])].sort();
+}
+
+function refreshAbsenceDropdowns() {
+  const names = getAllTeacherNames();
+  const options = `<option value="">Select teacher...</option>${names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}<option value="__custom__">Type name manually...</option>`;
+  document.querySelectorAll('.abs-teacher').forEach(sel => {
+    const current = sel.value;
+    sel.innerHTML = options;
+    if (current) sel.value = current;
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  LOG
+// ═══════════════════════════════════════════════════════
+
+let _logSortCol = 'date';
+let _logSortDir = 'desc';
+
+function sortLog(col) {
+  if (_logSortCol === col) { _logSortDir = _logSortDir === 'asc' ? 'desc' : 'asc'; }
+  else { _logSortCol = col; _logSortDir = col === 'date' ? 'desc' : 'asc'; }
+  renderLog();
+}
+
+function renderLog() {
+  let log = getLog().slice();
+  const tbody = document.getElementById('log-tbody');
+  const empty = document.getElementById('log-empty');
+  if (log.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+
+  // Sort
+  log.sort((a, b) => {
+    let va, vb;
+    if (_logSortCol === 'date') { va = a.date || ''; vb = b.date || ''; }
+    else if (_logSortCol === 'absentTeacher') { va = (a.absentTeacher || '').toLowerCase(); vb = (b.absentTeacher || '').toLowerCase(); }
+    else if (_logSortCol === 'period') { va = a.period || 0; vb = b.period || 0; }
+    else if (_logSortCol === 'coveringTeacher') { va = (a.coveringTeacher || '').toLowerCase(); vb = (b.coveringTeacher || '').toLowerCase(); }
+    if (va < vb) return _logSortDir === 'asc' ? -1 : 1;
+    if (va > vb) return _logSortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  // Update sort indicators
+  ['date','absentTeacher','period','coveringTeacher'].forEach(col => {
+    const el = document.getElementById('log-sort-' + col);
+    if (el) el.textContent = _logSortCol === col ? (_logSortDir === 'asc' ? ' ▲' : ' ▼') : '';
+  });
+
+  tbody.innerHTML = log.map(e => `<tr>
+    <td>${e.date}</td>
+    <td>${esc(e.absentTeacher)}</td>
+    <td>${e.period}</td>
+    <td>${esc(e.courseName)}</td>
+    <td>${esc(e.sectionNumber || '')}</td>
+    <td>${esc(e.roomNumber || '')}</td>
+    <td style="${isUnassigned(e.coveringTeacher) ? 'color:var(--red);font-weight:600' : ''}">${esc(e.coveringTeacher)}</td>
+  </tr>`).join('');
+}
+
+function clearLog() {
+  if (!confirm('Clear the entire coverage log? This cannot be undone.')) return;
+  setLog([]);
+  renderLog();
+}
+
+// ═══════════════════════════════════════════════════════
+//  SUMMARY
+// ═══════════════════════════════════════════════════════
+
+let _sumSortCol = 'tier';
+let _sumSortDir = 'asc';
+
+function sortSummary(col) {
+  if (_sumSortCol === col) { _sumSortDir = _sumSortDir === 'asc' ? 'desc' : 'asc'; }
+  else { _sumSortCol = col; _sumSortDir = ['total','week'].includes(col) ? 'desc' : 'asc'; }
+  renderSummary();
+}
+
+function renderSummary() {
+  const roster = getRoster();
+  const log = getLog();
+  const today = todayStr();
+  const { start: wStart, end: wEnd } = getWeekBounds(today);
+
+  const countsByTeacher = {};
+  const datesByTeacher = {};
+  log.forEach(e => {
+    if (!e.coveringTeacher || isSpecialLabel(e.coveringTeacher)) return;
+    const name = e.coveringTeacher.replace(' (Emergency)', '').trim();
+    countsByTeacher[name] = (countsByTeacher[name] || 0) + 1;
+    if (!datesByTeacher[name] || e.date > datesByTeacher[name]) datesByTeacher[name] = e.date;
+  });
+
+  const weekCountsByTeacher = {};
+  log.forEach(e => {
+    if (!e.coveringTeacher || isOutsideSub(e.coveringTeacher) || !e.date) return;
+    if (e.date >= wStart && e.date <= wEnd) {
+      const name = e.coveringTeacher.replace(' (Emergency)', '').trim();
+      weekCountsByTeacher[name] = (weekCountsByTeacher[name] || 0) + 1;
+    }
+  });
+
+  const tierOrder = { '1': 0, '2': 1, '3': 2, 'E': 3 };
+  const sorted = [...roster].sort((a, b) => {
+    let va, vb;
+    if (_sumSortCol === 'name') { va = a.name.toLowerCase(); vb = b.name.toLowerCase(); }
+    else if (_sumSortCol === 'tier') { va = tierOrder[a.tier] ?? 9; vb = tierOrder[b.tier] ?? 9; }
+    else if (_sumSortCol === 'total') { va = countsByTeacher[a.name] || 0; vb = countsByTeacher[b.name] || 0; }
+    else if (_sumSortCol === 'week') { va = weekCountsByTeacher[a.name] || 0; vb = weekCountsByTeacher[b.name] || 0; }
+    else if (_sumSortCol === 'last') { va = a.lastCoverageDate || ''; vb = b.lastCoverageDate || ''; }
+    if (va < vb) return _sumSortDir === 'asc' ? -1 : 1;
+    if (va > vb) return _sumSortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  // Update sort indicators
+  ['name','tier','total','week','last'].forEach(col => {
+    const el = document.getElementById('sum-sort-' + col);
+    if (el) el.textContent = _sumSortCol === col ? (_sumSortDir === 'asc' ? ' ▲' : ' ▼') : '';
+  });
+
+  const tbody = document.getElementById('summary-tbody');
+  tbody.innerHTML = sorted.map(t => {
+    const total = countsByTeacher[t.name] || 0;
+    const week = weekCountsByTeacher[t.name] || 0;
+    const last = t.lastCoverageDate || '—';
+    const rowClass = `summary-t${t.tier.toLowerCase()}`;
+    return `<tr class="${rowClass}">
+      <td style="font-weight:600">${esc(t.name)}${t.excluded ? ' <span class="tag tag-red">excluded</span>' : ''}</td>
+      <td><div class="tier-chip tier-${t.tier.toLowerCase()}">${t.tier}</div></td>
+      <td style="font-weight:600;text-align:center">${total}</td>
+      <td style="text-align:center">${week}</td>
+      <td style="font-size:12px">${last}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+//  RESET
+// ═══════════════════════════════════════════════════════
+
+function openResetModal() {
+  document.getElementById('reset-date').value = document.getElementById('run-date').value || todayStr();
+  document.getElementById('reset-modal').classList.add('open');
+}
+function closeResetModal() { document.getElementById('reset-modal').classList.remove('open'); }
+
+async function confirmReset() {
+  const dateStr = document.getElementById('reset-date').value;
+  if (!dateStr) { alert('Please select a date.'); return; }
+
+  const log = getLog();
+  const toRemove = log.filter(e => e.date === dateStr);
+  if (toRemove.length === 0) { alert('No entries found for that date.'); closeResetModal(); return; }
+
+  if (!confirm(`Remove ${toRemove.length} assignment(s) for ${dateStr} and roll back teacher records?`)) return;
+
+  const roster = getRoster();
+  const teachersToRollback = new Set(
+    toRemove
+      .filter(e => !isSpecialLabel(e.coveringTeacher))
+      .map(e => e.coveringTeacher.replace(' (Emergency)', '').trim())
+  );
+
+  const newLog = log.filter(e => e.date !== dateStr);
+
+  const toUpdate = [];
+  roster.forEach(t => {
+    if (!teachersToRollback.has(t.name)) return;
+    t.totalCoverages = Math.max(0, (t.totalCoverages || 0) - 1);
+    const prior = newLog
+      .filter(e => e.coveringTeacher?.replace(' (Emergency)', '').trim() === t.name)
+      .map(e => e.date).sort();
+    t.lastCoverageDate = prior.length > 0 ? prior[prior.length - 1] : (t.previousCoverageDate || '');
+    toUpdate.push(t);
+  });
+
+  setLog(newLog);
+  setRoster(roster);
+
+  if (STORAGE_MODE === 'sharepoint') {
+    await deleteLogEntriesSP(toRemove);
+    for (const t of toUpdate) await saveTeacherSP(t);
+  }
+
+  closeResetModal();
+  document.getElementById('output-area').style.display = 'none';
+  alert(`Reset complete. ${toRemove.length} assignment(s) removed for ${dateStr}.`);
+}
+
+// ═══════════════════════════════════════════════════════
+//  OVERRIDE
+// ═══════════════════════════════════════════════════════
+
+let _overrideEntries = [];
+let _overrideDateStr = '';
+let _overrideSortCol = 'period';
+let _overrideSortDir = 'asc';
+
+function loadOverrideEntries() {
+  const dateStr = document.getElementById('override-date').value;
+  if (!dateStr) { alert('Please select a date.'); return; }
+  _overrideDateStr = dateStr;
+  _overrideEntries = getLog().filter(e => e.date === dateStr);
+  _overrideSortCol = 'period';
+  _overrideSortDir = 'asc';
+  renderOverrideTable();
+}
+
+function sortOverrideBy(col) {
+  if (_overrideSortCol === col) {
+    _overrideSortDir = _overrideSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    _overrideSortCol = col;
+    _overrideSortDir = 'asc';
+  }
+  renderOverrideTable();
+}
+
+function renderOverrideTable() {
+  const container = document.getElementById('override-entries');
+
+  if (_overrideEntries.length === 0) {
+    container.innerHTML = '<div class="alert alert-warn">No assignments found for this date.</div>';
+    return;
+  }
+
+  const dateStr = _overrideDateStr;
+  const roster = getRoster();
+  const allNames = getAllTeacherNames();
+  const dayName = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
+
+  // Who is already covering each period today (to flag conflicts)
+  const alreadyCovering = {};
+  getLog().filter(e => e.date === dateStr).forEach(e => {
+    const ct = e.coveringTeacher?.replace(' (Emergency)', '').trim();
+    if (!ct || isSpecialLabel(ct)) return;
+    if (!alreadyCovering[e.period]) alreadyCovering[e.period] = new Set();
+    alreadyCovering[e.period].add(ct);
+  });
+
+  // Build grouped dropdown for a given period
+  function buildOptions(period) {
+    const available = [];
+    const unavailable = [];
+    allNames.forEach(name => {
+      const t = roster.find(r => r.name === name);
+      const avail = t ? (t.avail[dayName] instanceof Set ? t.avail[dayName] : new Set(t.avail[dayName] || [])) : new Set();
+      if (avail.has(period)) available.push(name);
+      else unavailable.push(name);
+    });
+    available.sort();
+    unavailable.sort();
+    const busyThisPeriod = alreadyCovering[period] || new Set();
+
+    // Outside Sub options
+    let opts = `<option value="Outside Sub 1">Outside Sub 1</option><option value="Outside Sub 2">Outside Sub 2</option>`;
+
+    if (available.length) {
+      opts += `<optgroup label="Available Period ${period}">`;
+      opts += available.map(n => {
+        const busy = busyThisPeriod.has(n);
+        const rt = roster.find(r => r.name === n);
+        const emg = rt && rt.tier === 'E' ? ' · emergency only' : '';
+        return `<option value="${esc(n)}" ${busy ? 'style="color:var(--red)"' : ''}>${esc(n)}${emg}${busy ? ' — already assigned' : ''}</option>`;
+      }).join('');
+      opts += '</optgroup>';
+    }
+    if (unavailable.length) {
+      opts += `<optgroup label="All Others">`;
+      opts += unavailable.map(n => {
+        const busy = busyThisPeriod.has(n);
+        return `<option value="${esc(n)}" ${busy ? 'style="color:var(--red)"' : ''}>${esc(n)}${busy ? ' — already assigned' : ''}</option>`;
+      }).join('');
+      opts += '</optgroup>';
+    }
+    return opts;
+  }
+
+  // Sort a copy — keep _overrideEntries in original order for stable log lookups
+  const sorted = _overrideEntries.map((e, origIdx) => ({ ...e, _origIdx: origIdx }));
+  sorted.sort((a, b) => {
+    let va, vb;
+    if (_overrideSortCol === 'period') { va = a.period; vb = b.period; }
+    else if (_overrideSortCol === 'absent') { va = a.absentTeacher || ''; vb = b.absentTeacher || ''; }
+    else if (_overrideSortCol === 'covering') { va = a.coveringTeacher || ''; vb = b.coveringTeacher || ''; }
+    else if (_overrideSortCol === 'course') { va = a.courseName || ''; vb = b.courseName || ''; }
+    if (typeof va === 'number') return _overrideSortDir === 'asc' ? va - vb : vb - va;
+    return _overrideSortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+
+  const arrow = (col) => _overrideSortCol === col ? (_overrideSortDir === 'asc' ? ' ▲' : ' ▼') : ' ⇅';
+  const thStyle = 'cursor:pointer;user-select:none;white-space:nowrap';
+
+  container.innerHTML = `
+    <div class="alert alert-info">Click column headers to sort. "Available" teachers have free periods today. Red = already assigned this period.</div>
+    <table>
+      <thead><tr>
+        <th style="${thStyle}" onclick="sortOverrideBy('period')">Period${arrow('period')}</th>
+        <th style="${thStyle}" onclick="sortOverrideBy('absent')">Absent Teacher${arrow('absent')}</th>
+        <th style="${thStyle}" onclick="sortOverrideBy('course')">Course${arrow('course')}</th>
+        <th style="${thStyle}" onclick="sortOverrideBy('covering')">Current Assignment${arrow('covering')}</th>
+        <th>Override To</th>
+        <th></th>
+      </tr></thead>
+      <tbody>
+        ${sorted.map((e) => `<tr>
+          <td style="font-weight:600;text-align:center">${e.period}</td>
+          <td>${esc(e.absentTeacher)}</td>
+          <td>${esc(e.courseName)}</td>
+          <td style="font-weight:600${isUnassigned(e.coveringTeacher) ? ';color:var(--red)' : isOutsideSub(e.coveringTeacher) ? ';color:var(--navy)' : ''}">${esc(e.coveringTeacher)}</td>
+          <td>
+            <select id="override-new-${e._origIdx}" style="width:100%">
+              <option value="">— Keep current —</option>
+              ${buildOptions(e.period)}
+            </select>
+          </td>
+          <td>
+            <div style="display:flex;gap:4px">
+              <button class="btn btn-primary btn-sm" onclick="applyOverride(${e._origIdx}, '${dateStr}')">Apply</button>
+              <button class="btn btn-ghost btn-sm" onclick="resetOverride(${e._origIdx}, '${dateStr}')" title="Clear assignment, keep absence row">↺ Reset</button>
+              <button class="btn btn-danger btn-sm" onclick="removeOverride(${e._origIdx}, '${dateStr}')" title="Remove this assignment entirely">✕ Remove</button>
+              ${isOutsideSub(e.coveringTeacher) ? `<button class="btn btn-sm ${e.manualOverride ? 'btn-gold' : 'btn-ghost'}" onclick="toggleOutsideSubLock(${e._origIdx}, '${dateStr}')" title="${e.manualOverride ? 'Locked — click to unlock' : 'Soft — click to lock'}">${e.manualOverride ? '🔒' : '🔓'}</button>` : ''}
+            </div>
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+async function applyOverride(idx, dateStr) {
+  const entry = _overrideEntries[idx];
+  const newTeacher = document.getElementById(`override-new-${idx}`).value;
+  if (!newTeacher) { alert('Please select a new teacher.'); return; }
+
+  const oldTeacher = entry.coveringTeacher.replace(' (Emergency)', '').trim();
+  const roster = getRoster();
+  const log = getLog();
+
+  const logEntry = log.find(e => e.date === dateStr && e.absentTeacher === entry.absentTeacher && e.period === entry.period);
+  if (logEntry) {
+    logEntry.coveringTeacher = newTeacher;
+    if (STORAGE_MODE === 'sharepoint') await updateLogEntrySP(logEntry);
+  }
+  setLog(log);
+
+  const oldT = roster.find(t => t.name === oldTeacher);
+  if (oldT && !isSpecialLabel(oldTeacher)) {
+    oldT.totalCoverages = Math.max(0, (oldT.totalCoverages || 0) - 1);
+    const prior = log.filter(e => e.coveringTeacher?.replace(' (Emergency)', '').trim() === oldTeacher && e.date !== dateStr).map(e => e.date).sort();
+    oldT.lastCoverageDate = prior.length > 0 ? prior[prior.length - 1] : (oldT.previousCoverageDate || '');
+    if (STORAGE_MODE === 'sharepoint') await saveTeacherSP(oldT);
+  }
+
+  const newT = roster.find(t => t.name === newTeacher);
+  if (newT) {
+    newT.previousCoverageDate = newT.lastCoverageDate;
+    newT.lastCoverageDate = dateStr;
+    newT.totalCoverages = (newT.totalCoverages || 0) + 1;
+    if (STORAGE_MODE === 'sharepoint') await saveTeacherSP(newT);
+  }
+
+  setRoster(roster);
+  _overrideEntries = getLog().filter(e => e.date === dateStr);
+  renderOverrideTable();
+}
+
+// Reset: clears the covering teacher assignment but keeps the log entry (shows as UNASSIGNED)
+function resetOverride(idx, dateStr) {
+  const entry = _overrideEntries[idx];
+  const oldTeacher = entry.coveringTeacher.replace(' (Emergency)', '').trim();
+  const roster = getRoster();
+  const log = getLog();
+
+  // Update log entry to UNASSIGNED
+  const logEntry = log.find(e => e.date === dateStr && e.absentTeacher === entry.absentTeacher && e.period === entry.period);
+  if (logEntry) logEntry.coveringTeacher = '⚠ UNASSIGNED';
+  setLog(log);
+
+  // Roll back old teacher stats
+  const oldT = roster.find(t => t.name === oldTeacher);
+  if (oldT && !isSpecialLabel(oldTeacher)) {
+    oldT.totalCoverages = Math.max(0, (oldT.totalCoverages || 0) - 1);
+    const prior = log.filter(e => e.coveringTeacher?.replace(' (Emergency)', '').trim() === oldTeacher && e.date !== dateStr).map(e => e.date).sort();
+    oldT.lastCoverageDate = prior.length > 0 ? prior[prior.length - 1] : (oldT.previousCoverageDate || '');
+  }
+
+  setRoster(roster);
+  _overrideEntries = getLog().filter(e => e.date === dateStr);
+  renderOverrideTable();
+}
+
+// Remove: deletes the log entry entirely and rolls back stats
+function removeOverride(idx, dateStr) {
+  if (!confirm('Remove this assignment entirely? The absence row will be cleared from the log.')) return;
+  const entry = _overrideEntries[idx];
+  const oldTeacher = entry.coveringTeacher.replace(' (Emergency)', '').trim();
+  const roster = getRoster();
+  let log = getLog();
+
+  // Remove from log
+  log = log.filter(e => !(e.date === dateStr && e.absentTeacher === entry.absentTeacher && e.period === entry.period));
+  setLog(log);
+
+  // Roll back old teacher stats
+  const oldT = roster.find(t => t.name === oldTeacher);
+  if (oldT && !isSpecialLabel(oldTeacher)) {
+    oldT.totalCoverages = Math.max(0, (oldT.totalCoverages || 0) - 1);
+    const prior = log.filter(e => e.coveringTeacher?.replace(' (Emergency)', '').trim() === oldTeacher).map(e => e.date).sort();
+    oldT.lastCoverageDate = prior.length > 0 ? prior[prior.length - 1] : (oldT.previousCoverageDate || '');
+  }
+
+  setRoster(roster);
+  _overrideEntries = getLog().filter(e => e.date === dateStr);
+  renderOverrideTable();
+}
+
+// Toggle manualOverride lock on an outside sub assignment
+function toggleOutsideSubLock(idx, dateStr) {
+  const entry = _overrideEntries[idx];
+  const log = getLog();
+  const logEntry = log.find(e => e.date === dateStr && e.absentTeacher === entry.absentTeacher && e.period === entry.period);
+  if (logEntry) logEntry.manualOverride = !logEntry.manualOverride;
+  setLog(log);
+  _overrideEntries = getLog().filter(e => e.date === dateStr);
+  renderOverrideTable();
+}
+
+// ═══════════════════════════════════════════════════════
+//  SCHEDULE (VERACROSS CSV) IMPORT
+// ═══════════════════════════════════════════════════════
+
+// scheduleData: { "Teacher Name": [ { period, day, courseName, section, room }, ... ] }
+let scheduleData = {};
+
+function loadScheduleFromStorage() {
+  try {
+    const stored = localStorage.getItem('cs_schedule');
+    if (stored) {
+      scheduleData = JSON.parse(stored);
+      const count = Object.keys(scheduleData).length;
+      if (count > 0) {
+        document.getElementById('schedule-status').textContent = `✓ ${count} teachers loaded`;
+      }
+    }
+  } catch(e) {}
+}
+
+function saveScheduleToStorage() {
+  try { localStorage.setItem('cs_schedule', JSON.stringify(scheduleData)); } catch(e) {}
+}
+
+// Meeting time day codes
+const DAY_CODE_MAP = { M: 'Monday', T: 'Tuesday', W: 'Wednesday', R: 'Thursday', F: 'Friday' };
+
+function loadScheduleCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const text = e.target.result;
+      const lines = text.split(/\r?\n/);
+      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+
+      const idx = {
+        teacher: headers.findIndex(h => h.toLowerCase() === 'teacher'),
+        classId: headers.findIndex(h => h.toLowerCase() === 'class id'),
+        room: headers.findIndex(h => h.toLowerCase() === 'rooms' || h.toLowerCase() === 'room'),
+        description: headers.findIndex(h => h.toLowerCase() === 'description'),
+        meetingTimes: headers.findIndex(h => h.toLowerCase() === 'meeting times'),
+        status: headers.findIndex(h => h.toLowerCase() === 'status'),
+      };
+
+      scheduleData = {};
+      let parsed = 0;
+
+      for (let i = 1; i < lines.length; i++) {
+        if (!lines[i].trim()) continue;
+        // Handle quoted fields
+        const cols = parseCSVLine(lines[i]);
+        const teacher = (cols[idx.teacher] || '').trim();
+        const status = (cols[idx.status] || '').trim();
+        const meetingTimes = (cols[idx.meetingTimes] || '').trim();
+        if (!teacher || !meetingTimes || meetingTimes === '-') continue;
+        if (status && status.toLowerCase() !== 'active') continue;
+
+        const courseName = (cols[idx.description] || '').trim();
+        const section = (cols[idx.classId] || '').trim();
+        const fallbackRoom = idx.room >= 0 ? (cols[idx.room] || '').trim() : '';
+
+        // Parse meeting times like "M-3", "T-5, W-5", "MWR-1, F-7"
+        const slots = parseMeetingTimes(meetingTimes);
+        if (!scheduleData[teacher]) scheduleData[teacher] = [];
+        slots.forEach(({ day, period }) => {
+          // Look up specific room from room chart first
+          const chartRoom = getRoomFromChart(section, day, period);
+          const room = chartRoom || fallbackRoom;
+          scheduleData[teacher].push({ day, period, courseName, section, room });
+        });
+        parsed++;
+      }
+
+      const teacherCount = Object.keys(scheduleData).length;
+      document.getElementById('schedule-status').textContent = `✓ ${teacherCount} teachers loaded`;
+      showImportAlert('success', `Schedule loaded: ${teacherCount} teachers, ${parsed} class sections.`);
+      // Save to localStorage and refresh dropdowns
+      saveScheduleToStorage();
+      refreshAbsenceDropdowns();
+      populateAbtTeacherDropdown();
+    } catch(err) {
+      showImportAlert('error', 'Could not parse schedule CSV: ' + err.message);
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+function parseCSVLine(line) {
+  // Remove trailing carriage return if present
+  line = line.replace(/\r$/, '');
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '"') { inQuotes = !inQuotes; }
+    else if (line[i] === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
+    else { current += line[i]; }
+  }
+  result.push(current.trim());
+  return result;
+}
+
+function parseMeetingTimes(str) {
+  // e.g. "M-3, T-5, W-5", "MWR-1", "M-7, T-6"
+  const slots = [];
+  const parts = str.split(',').map(s => s.trim());
+  parts.forEach(part => {
+    const match = part.match(/^([MTWRF]+)-(\d+)$/i);
+    if (!match) return;
+    const dayCodes = match[1].toUpperCase().split('');
+    const period = parseInt(match[2]);
+    if (isNaN(period)) return;
+    dayCodes.forEach(code => {
+      const day = DAY_CODE_MAP[code];
+      if (day) slots.push({ day, period });
+    });
+  });
+  return slots;
+}
+
+// ═══════════════════════════════════════════════════════
+//  DERIVE AVAILABILITY FROM ASSIGNED COVERAGE PERIODS
+// ═══════════════════════════════════════════════════════
+
+// A schedule row counts as a coverage period if the course name is "Coverage"
+// or the section ID starts with CVRG. Everything else is a real class.
+function isCoverageSlot(c) {
+  const name = (c.courseName || '').trim().toLowerCase();
+  const section = (c.section || '').trim().toUpperCase();
+  return name === 'coverage' || section.startsWith('CVRG');
+}
+
+// Every teacher present in the schedule gets an entry holding two things:
+// the periods explicitly assigned as Coverage, and every period they are
+// booked for anything at all. Teachers with no Coverage duty fall back to
+// their free periods as an emergency-only pool.
+function buildCoverageMap() {
+  const map = {};
+  Object.entries(scheduleData).forEach(([teacher, classes]) => {
+    map[teacher] = { coverage: {}, busy: {} };
+    DAYS.forEach(d => { map[teacher].coverage[d] = new Set(); map[teacher].busy[d] = new Set(); });
+    classes.forEach(c => {
+      if (!map[teacher].busy[c.day]) return;
+      map[teacher].busy[c.day].add(c.period);
+      if (isCoverageSlot(c)) map[teacher].coverage[c.day].add(c.period);
+    });
+  });
+  return map;
+}
+
+function hasAnyCoverage(entry) {
+  return DAYS.some(d => entry.coverage[d].size > 0);
+}
+
+// Periods the teacher is not booked for anything, used only for the tier E pool
+function freePeriods(entry) {
+  const out = {};
+  DAYS.forEach(d => { out[d] = PERIODS.filter(p => !entry.busy[d].has(p)); });
+  return out;
+}
+
+function deriveAvailabilityFromSchedule() {
+  if (!Object.keys(scheduleData).length) {
+    showImportAlert('error', 'No schedule loaded. Load the Veracross schedule CSV first, then sync.');
+    return;
+  }
+
+  const covMap = buildCoverageMap();
+  const withCoverage = Object.keys(covMap).filter(n => hasAnyCoverage(covMap[n]));
+  if (!withCoverage.length) {
+    showImportAlert('error', 'The loaded schedule contains no Coverage periods. Check that coverage rows are included in the CSV export.');
+    return;
+  }
+
+  const roster = getRoster();
+  const rosterNames = new Set(roster.map(t => t.name));
+  const scheduled = Object.keys(covMap);
+  const toAdd = scheduled.filter(n => !rosterNames.has(n)).sort();
+  const notInSchedule = roster.filter(t => !covMap[t.name]).map(t => t.name).sort();
+
+  const msg = `Sync roster with schedule?\n\n`
+    + `\u2022 ${withCoverage.length} have Coverage periods\n`
+    + `\u2022 ${scheduled.length - withCoverage.length} have no Coverage duty\n`
+    + `\u2022 ${toAdd.length} new, added at Tier 1\n`
+    + `\u2022 ${notInSchedule.length} not in the schedule, left alone`;
+  if (!confirm(msg)) return;
+
+  let updated = 0, unchanged = 0;
+  const noDuty = [];   // no coverage duty and not Tier E, so currently invisible
+
+  // Availability depends on the tier the user has set, never the other way round.
+  //   Has Coverage periods      -> exactly those periods
+  //   No Coverage, Tier E       -> free periods, manual emergency pool
+  //   No Coverage, Tier 1/2/3   -> nothing, so preps stay protected
+  const availFor = (entry, tier) => {
+    if (hasAnyCoverage(entry)) {
+      const a = {};
+      DAYS.forEach(d => { a[d] = [...entry.coverage[d]].sort((x, y) => x - y); });
+      return a;
+    }
+    if (tier === 'E') return freePeriods(entry);
+    return Object.fromEntries(DAYS.map(d => [d, []]));
+  };
+
+  roster.forEach(t => {
+    const entry = covMap[t.name];
+    if (!entry) return;                    // not on the schedule, leave untouched
+    if (!hasAnyCoverage(entry) && t.tier !== 'E') noDuty.push(t.name);
+    const next = availFor(entry, t.tier);
+    const changed = DAYS.some(d =>
+      (next[d] || []).join(',') !== [...(t.avail[d] || [])].sort((x, y) => x - y).join(',')
+    );
+    t.avail = next;
+    if (changed) updated++; else unchanged++;
+  });
+
+  toAdd.forEach(name => {
+    roster.push({
+      id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
+      name,
+      tier: '1',
+      highAvail: false,
+      excluded: false,
+      avail: availFor(covMap[name], '1'),
+      lastCoverageDate: '',
+      previousCoverageDate: '',
+      totalCoverages: 0,
+    });
+    if (!hasAnyCoverage(covMap[name])) noDuty.push(name);
+  });
+
+  setRoster(roster);
+  renderRoster();
+  refreshAbsenceDropdowns();
+  renderDeriveReport({ updated, unchanged, addedNames: toAdd, noDuty: noDuty.sort(), notInSchedule });
+}
+
+// Removes only the flagged names the user checked. Anyone left unchecked stays
+// on the roster and stays listed, so the review can be finished in passes.
+function removeCheckedUnscheduled() {
+  const boxes = [...document.querySelectorAll('.unsched-pick')];
+  const names = boxes.filter(cb => cb.checked).map(cb => cb.value);
+  if (!names.length) { showImportAlert('error', 'No one is checked. Check the people who have left, then remove.'); return; }
+  if (!confirm(`Remove ${names.length} teacher(s) from the roster?\n\n${names.join('\n')}\n\nThe coverage log is not affected.`)) return;
+
+  setRoster(getRoster().filter(t => !names.includes(t.name)));
+  renderRoster();
+  refreshAbsenceDropdowns();
+
+  // Drop the removed rows, keep the rest listed so review can continue
+  boxes.forEach(cb => { if (cb.checked) cb.closest('label').remove(); });
+  const left = document.querySelectorAll('.unsched-pick').length;
+  const header = document.getElementById('unsched-header');
+  if (left && header) {
+    header.textContent = `Not in the schedule at all. Check only the people who have left (${left})`;
+  } else {
+    document.getElementById('derive-report').style.display = 'none';
+  }
+  showImportAlert('success', `Removed ${names.length} teacher(s) from the roster.`);
+}
+
+function renderDeriveReport({ updated, unchanged, addedNames, noDuty, notInSchedule }) {
+  const el = document.getElementById('derive-report');
+  const chips = names => names.map(n =>
+    `<span class="sync-chip">${esc(n)}</span>`
+  ).join('');
+  const block = (label, body, count, id) => count
+    ? `<div style="margin-top:12px"><div${id ? ` id="${id}"` : ''} class="sync-block-title">${label} (${count})</div>${body}</div>`
+    : '';
+
+  // Each flagged name gets its own checkbox so departed staff can be removed
+  // without touching people who simply never appear in a class export.
+  const pickList = notInSchedule.map((n, i) =>
+    `<label class="sync-pick-row">
+       <input type="checkbox" class="unsched-pick" value="${esc(n)}" id="unsched-${i}" />
+       <span>${esc(n)}</span>
+     </label>`
+  ).join('');
+
+  const removeBlock = notInSchedule.length
+    ? `<div class="sync-pick-box">
+         ${pickList}
+         <div style="margin-top:8px;display:flex;gap:6px;align-items:center">
+           <button class="btn btn-danger btn-sm" onclick="removeCheckedUnscheduled()">Remove checked</button>
+           <button class="btn btn-ghost btn-sm" onclick="toggleAllUnscheduled(true)">Check all</button>
+           <button class="btn btn-ghost btn-sm" onclick="toggleAllUnscheduled(false)">Clear</button>
+         </div>
+       </div>`
+    : '';
+
+  const noDutyRows = noDuty.map(n => {
+    const t = getRoster().find(x => x.name === n);
+    return `<div class="sync-tier-row">
+      ${tierSelectHtml(t ? t.tier : '1', `setTierByName('${esc(n).replace(/'/g, "\\'")}', this.value)`)}
+      <span>${esc(n)}</span>
+    </div>`;
+  }).join('');
+
+  const noDutyBlock = noDuty.length
+    ? `<div class="sync-pick-box">${noDutyRows}
+         <div class="sync-note">Set anyone here to Tier E if they should be available at any free period. Tier E takes effect on the next sync. Otherwise they stay in the normal pool with their preps protected.</div>
+       </div>`
+    : '';
+
+  el.innerHTML = `
+    <div style="border:1px solid var(--gray-200);border-radius:var(--radius-sm);padding:14px;margin-bottom:12px;background:var(--gray-100)">
+      <div class="flex-between" style="margin-bottom:6px">
+        <div style="font-weight:700;font-size:13px">Roster synced with schedule</div>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('derive-report').style.display='none'">Hide</button>
+      </div>
+      <div style="font-size:12px;color:var(--gray-600)">
+        ${updated} updated &middot; ${unchanged} already matched &middot; ${addedNames.length} added &middot; tiers unchanged
+      </div>
+      ${block('Added at Tier 1, review tiers', chips(addedNames), addedNames.length)}
+      ${block('No coverage duty this year, currently not assignable', noDutyBlock, noDuty.length)}
+      ${block('Not in the schedule at all. Check only the people who have left', removeBlock, notInSchedule.length, 'unsched-header')}
+    </div>`;
+  el.style.display = 'block';
+}
+
+function toggleAllUnscheduled(state) {
+  document.querySelectorAll('.unsched-pick').forEach(cb => { cb.checked = state; });
+}
+
+function clearRoster() {
+  const roster = getRoster();
+  if (!roster.length) { showImportAlert('error', 'The roster is already empty.'); return; }
+  if (!confirm(`Remove all ${roster.length} teacher(s) from the roster?\n\nThe coverage log is not affected. Back up first if you have not already.`)) return;
+  if (!confirm('Confirm once more. This cannot be undone.')) return;
+  setRoster([]);
+  renderRoster();
+  refreshAbsenceDropdowns();
+  document.getElementById('derive-report').style.display = 'none';
+  showImportAlert('success', 'Roster cleared.');
+}
+
+// ═══════════════════════════════════════════════════════
+//  ADD BY TEACHER MODAL
+// ═══════════════════════════════════════════════════════
+
+function openAddByTeacher() {
+  populateAbtTeacherDropdown();
+  document.getElementById('abt-teacher').value = '';
+  document.getElementById('abt-periods').innerHTML = '';
+  document.getElementById('abt-day-info').textContent = '';
+  document.getElementById('abt-no-schedule').style.display = Object.keys(scheduleData).length === 0 ? 'flex' : 'none';
+  document.getElementById('add-by-teacher-modal').classList.add('open');
+}
+
+function closeAddByTeacher() {
+  document.getElementById('add-by-teacher-modal').classList.remove('open');
+}
+
+function populateAbtTeacherDropdown() {
+  const names = getAllTeacherNames();
+  const sel = document.getElementById('abt-teacher');
+  sel.innerHTML = '<option value="">Select teacher...</option>' +
+    names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+}
+
+function loadTeacherPeriods() {
+  const teacher = document.getElementById('abt-teacher').value;
+  const container = document.getElementById('abt-periods');
+  const dayInfo = document.getElementById('abt-day-info');
+  container.innerHTML = '';
+  if (!teacher) return;
+
+  // Get day of week from run date
+  const dateStr = document.getElementById('run-date').value;
+  const dayName = dateStr ? new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' }) : null;
+
+  const classes = scheduleData[teacher] || [];
+
+  if (classes.length === 0) {
+    // No schedule — show manual period checkboxes
+    dayInfo.textContent = 'No schedule found for this teacher — select periods manually:';
+    container.innerHTML = PERIODS.map(p => `
+      <label style="display:inline-flex;align-items:center;gap:6px;margin:4px 8px 4px 0;cursor:pointer">
+        <input type="checkbox" class="abt-period-check" data-period="${p}" data-course="" data-section="" data-room="" />
+        Period ${p}
+      </label>`).join('');
+    return;
+  }
+
+  // Filter by day if we have a date
+  const filtered = dayName ? classes.filter(c => c.day === dayName) : classes;
+
+  if (dayName && filtered.length === 0) {
+    dayInfo.textContent = `No classes scheduled on ${dayName} for this teacher.`;
+    container.innerHTML = '';
+    return;
+  }
+
+  const display = filtered.length > 0 ? filtered : classes;
+  const label = dayName ? `Classes on ${dayName}:` : `All classes (date not set):`;
+  dayInfo.textContent = label;
+
+  // Group by period for display
+  const byPeriod = {};
+  display.forEach(c => {
+    if (!byPeriod[c.period]) byPeriod[c.period] = [];
+    byPeriod[c.period].push(c);
+  });
+
+  container.innerHTML = Object.entries(byPeriod).sort((a,b) => a[0]-b[0]).map(([period, items]) => {
+    const c = items[0];
+    const liveRoom = getRoomFromChart(c.section, c.day, parseInt(period)) || c.room;
+    const seniorEnded = document.getElementById('senior-classes-ended')?.checked;
+    const isGrade12 = /\b12\b/.test(c.section) || /\b12\b/.test(c.courseName);
+    const autoSkip = seniorEnded && isGrade12;
+    const checkedAttr = autoSkip ? '' : 'checked';
+    const skipNote = autoSkip ? ' <span style="font-size:10px;color:var(--amber);font-weight:600">Senior class — skipped</span>' : '';
+    return `<label style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-bottom:4px;border:1.5px solid ${autoSkip ? 'var(--amber-light)' : 'var(--gray-200)'};border-radius:6px;cursor:pointer;background:var(--white)" class="abt-row">
+      <input type="checkbox" class="abt-period-check" ${checkedAttr}
+        data-period="${period}"
+        data-course="${esc(c.courseName)}"
+        data-section="${esc(c.section)}"
+        data-room="${esc(liveRoom)}" />
+      <div>
+        <div style="font-weight:600;font-size:13px">Period ${period} — ${esc(c.courseName)}${skipNote}</div>
+        <div style="font-size:11px;color:var(--gray-400)">Section: ${esc(c.section)}${liveRoom ? ' · Room: ' + esc(liveRoom) : ''}</div>
+      </div>
+    </label>`;
+  }).join('');
+}
+
+function confirmAddByTeacher() {
+  const teacher = document.getElementById('abt-teacher').value;
+  if (!teacher) { alert('Please select a teacher.'); return; }
+
+  const checked = document.querySelectorAll('.abt-period-check:checked');
+  if (checked.length === 0) { alert('Please select at least one period.'); return; }
+
+  checked.forEach(cb => {
+    addAbsenceRowWithData(teacher, parseInt(cb.dataset.period), cb.dataset.course, cb.dataset.section, cb.dataset.room);
+  });
+
+  closeAddByTeacher();
+}
+
+function addAbsenceRowWithData(teacher, period, course, section, room, noCoverage, absType) {
+  const roster = getRoster();
+  const names = roster.map(t => t.name).sort();
+  const tbody = document.getElementById('absences-tbody');
+  const tr = document.createElement('tr');
+  const allNames = [...new Set([...names, teacher])].sort();
+  tr.innerHTML = `
+    <td>
+      <select class="abs-teacher" style="width:100%">
+        <option value="">Select teacher...</option>
+        ${allNames.map(n => `<option value="${esc(n)}"${n === teacher ? ' selected' : ''}>${esc(n)}</option>`).join('')}
+        <option value="__custom__">Type name manually...</option>
+      </select>
+      <input class="abs-teacher-custom" type="text" placeholder="Enter name exactly" style="display:none;margin-top:4px" />
+    </td>
+    <td>
+      <select class="abs-period" style="width:100%">
+        ${PERIODS.map(p => `<option value="${p}"${p === period ? ' selected' : ''}>${p}</option>`).join('')}
+      </select>
+    </td>
+    <td><input class="abs-course" type="text" value="${esc(course)}" placeholder="Course name" /></td>
+    <td><input class="abs-section" type="text" value="${esc(section)}" placeholder="01" style="width:80px" /></td>
+    <td><input class="abs-room" type="text" value="${esc(room)}" placeholder="204" style="width:60px" /></td>
+    <td>
+      <select class="abs-type" style="width:100%;font-size:12px;padding:4px 6px">
+        <option value="normal" ${(!absType || absType === "normal") ? "selected" : ""}>Staff</option>
+        <option value="outside" ${absType === "outside" ? "selected" : ""}>Outside Sub</option>
+        <option value="skip" ${absType === "skip" ? "selected" : ""}>Skip</option>
+      </select>
+    </td>
+    <td>
+      <div style="display:flex;gap:4px">
+        <button class="btn btn-ghost btn-sm" onclick="duplicateAbsenceRow(this)" title="Duplicate row">⧉</button>
+        <button class="btn btn-danger btn-sm" onclick="this.closest('tr').remove()">✕</button>
+      </div>
+    </td>
+  `;
+  tbody.appendChild(tr);
+  const sel = tr.querySelector('.abs-teacher');
+  const custom = tr.querySelector('.abs-teacher-custom');
+  sel.addEventListener('change', () => { custom.style.display = sel.value === '__custom__' ? 'block' : 'none'; });
+  const typeSel = tr.querySelector('.abs-type');
+  if (typeSel) {
+    typeSel.addEventListener('change', () => { tr.style.opacity = typeSel.value === 'skip' ? '0.5' : '1'; });
+    if (absType === 'skip') tr.style.opacity = '0.5';
+  }
+}
+
+function duplicateAbsenceRow(btn) {
+  const tr = btn.closest('tr');
+  const clone = tr.cloneNode(true);
+  // Re-attach event listeners
+  const sel = clone.querySelector('.abs-teacher');
+  const custom = clone.querySelector('.abs-teacher-custom');
+  sel.addEventListener('change', () => {
+    custom.style.display = sel.value === '__custom__' ? 'block' : 'none';
+  });
+  clone.querySelectorAll('.btn-danger').forEach(b => b.onclick = () => b.closest('tr').remove());
+  clone.querySelectorAll('[onclick*="duplicateAbsenceRow"]').forEach(b => b.onclick = () => duplicateAbsenceRow(b));
+  tr.parentNode.insertBefore(clone, tr.nextSibling);
+}
+
+function showImportAlert(type, msg) {
+  const el = document.getElementById('import-alert');
+  el.className = `alert alert-${type === 'success' ? 'success' : 'error'}`;
+  el.textContent = msg;
+  el.style.display = 'flex';
+  setTimeout(() => { el.style.display = 'none'; }, 6000);
+}
+
+// ═══════════════════════════════════════════════════════
+//  EXPORT TO EXCEL
+// ═══════════════════════════════════════════════════════
+
+function exportToExcel(label) {
+  const log = getLog();
+  const roster = getRoster();
+  const today = todayStr();
+  const { start: wStart, end: wEnd } = getWeekBounds(today);
+
+  const wb = XLSX.utils.book_new();
+
+  // ── LOG SHEET ──
+  const logHeaders = ['Date', 'Absent Teacher', 'Period', 'Course', 'Section', 'Room', 'Covering Teacher'];
+  const logRows = log.slice().sort((a,b) => b.date.localeCompare(a.date)).map(e => [
+    e.date,
+    e.absentTeacher || '',
+    e.period || '',
+    e.courseName || '',
+    e.sectionNumber || '',
+    e.roomNumber || '',
+    e.coveringTeacher || ''
+  ]);
+  const logSheet = XLSX.utils.aoa_to_sheet([logHeaders, ...logRows]);
+  logSheet['!cols'] = [14,24,8,30,10,10,28].map(w => ({ wch: w }));
+  // Bold header row
+  logHeaders.forEach((_, ci) => {
+    const cell = logSheet[XLSX.utils.encode_cell({ r: 0, c: ci })];
+    if (cell) { cell.s = { font: { bold: true }, fill: { fgColor: { rgb: 'E8F0F9' } } }; }
+  });
+  XLSX.utils.book_append_sheet(wb, logSheet, 'Coverage Log');
+
+  // ── SUMMARY SHEET ──
+  const countsByTeacher = {};
+  const weekCountsByTeacher = {};
+  log.forEach(e => {
+    if (!e.coveringTeacher || isSpecialLabel(e.coveringTeacher)) return;
+    const name = e.coveringTeacher.replace(' (Emergency)', '').trim();
+    countsByTeacher[name] = (countsByTeacher[name] || 0) + 1;
+    if (e.date >= wStart && e.date <= wEnd) weekCountsByTeacher[name] = (weekCountsByTeacher[name] || 0) + 1;
+  });
+
+  const tierOrder = { '1': 0, '2': 1, '3': 2, 'E': 3 };
+  const sortedRoster = [...roster].sort((a,b) => {
+    const ta = tierOrder[a.tier] ?? 9, tb = tierOrder[b.tier] ?? 9;
+    if (ta !== tb) return ta - tb;
+    return (countsByTeacher[b.name] || 0) - (countsByTeacher[a.name] || 0);
+  });
+
+  const summaryHeaders = ['Teacher', 'Tier', 'Total (Year)', 'This Week', 'Last Coverage', 'Excluded'];
+  const summaryRows = sortedRoster.map(t => [
+    t.name,
+    t.tier,
+    t.totalCoverages || 0,
+    weekCountsByTeacher[t.name] || 0,
+    t.lastCoverageDate || '',
+    t.excluded ? 'Yes' : ''
+  ]);
+  const summarySheet = XLSX.utils.aoa_to_sheet([summaryHeaders, ...summaryRows]);
+  summarySheet['!cols'] = [28, 8, 14, 12, 16, 10].map(w => ({ wch: w }));
+  summaryHeaders.forEach((_, ci) => {
+    const cell = summarySheet[XLSX.utils.encode_cell({ r: 0, c: ci })];
+    if (cell) { cell.s = { font: { bold: true }, fill: { fgColor: { rgb: 'E8F0F9' } } }; }
+  });
+  XLSX.utils.book_append_sheet(wb, summarySheet, 'Coverage Summary');
+
+  // ── DOWNLOAD ──
+  const filename = label ? `coverage export ${label}.xlsx` : `coverage_export_${today}.xlsx`;
+  XLSX.writeFile(wb, filename);
+}
+
+// ═══════════════════════════════════════════════════════
+//  START NEW YEAR
+// ═══════════════════════════════════════════════════════
+
+// Derives a school-year label like "2025-2026" from the earliest date in the
+// log. August or later belongs to the year starting then; anything earlier
+// belongs to the year that started the previous August. Always four digits,
+// hyphen, four digits, so the typed confirmation format never varies.
+function schoolYearLabelFromLog(log) {
+  const dates = log.map(e => e.date).filter(Boolean).sort();
+  const d = dates.length ? dates[0] : todayStr();
+  const year = parseInt(d.slice(0, 4));
+  const month = parseInt(d.slice(5, 7));
+  const start = (isNaN(year) ? new Date().getFullYear() : (month >= 8 ? year : year - 1));
+  return `${start}-${start + 1}`;
+}
+
+function startNewYear() {
+  const log = getLog();
+  if (!log.length) {
+    alert('The log is already empty, so there is nothing to archive.\n\nIf you have already started the new year, load the schedule and run Sync with Schedule.');
+    return;
+  }
+
+  const label = schoolYearLabelFromLog(log);
+  const roster = getRoster();
+  const dated = ['cs_absences_', 'cs_notes_', 'cs_outsidesubcount_'];
+  let datedCount = 0;
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && dated.some(p => k.startsWith(p))) datedCount++;
+  }
+
+  const intro = `Archive ${label} and start a new year?\n\n`
+    + `Downloads a backup and an Excel export, then clears:\n`
+    + `\u2022 ${log.length} log entries\n`
+    + `\u2022 coverage totals for ${roster.length} teachers\n`
+    + `\u2022 ${datedCount} saved absence and note records\n`
+    + `\u2022 all exclusions and Hi-Avail flags\n\n`
+    + `Teachers, tiers, availability, schedule, and room chart are kept.`;
+  if (!confirm(intro)) return;
+
+  // Downloads first. Nothing destructive has happened yet, so cancelling
+  // at the next gate costs nothing.
+  try {
+    exportAllData(label);
+    exportToExcel(label);
+  } catch (err) {
+    alert('The downloads did not complete, so nothing was cleared.\n\n' + err.message);
+    return;
+  }
+
+  const typed = prompt(
+    `Both files should now be in your Downloads folder.\n\n`
+    + `Type ${label} to clear the log.`
+  );
+
+  if (typed === null) { alert('Cancelled. Nothing was cleared.'); return; }
+  if (typed.trim() !== label) {
+    alert(`That did not match ${label}. Nothing was cleared.`);
+    return;
+  }
+
+  // Clear the log
+  setLog([]);
+
+  // Zero the counters the assigner sorts by, and drop exclusions and Hi-Avail
+  // flags, which describe one year's circumstances and should not carry over.
+  let unexcluded = 0, unflagged = 0;
+  roster.forEach(t => {
+    t.totalCoverages = 0;
+    t.lastCoverageDate = '';
+    t.previousCoverageDate = '';
+    if (t.excluded) { t.excluded = false; unexcluded++; }
+    if (t.highAvail) { t.highAvail = false; unflagged++; }
+  });
+  setRoster(roster);
+
+  // Drop per-date absences, notes, and outside-sub counts
+  const stale = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && dated.some(p => k.startsWith(p))) stale.push(k);
+  }
+  stale.forEach(k => localStorage.removeItem(k));
+
+  // Senior classes ending is a spring setting
+  setData('cs_senior_ended', false);
+  const seniorBox = document.getElementById('senior-classes-ended');
+  if (seniorBox) seniorBox.checked = false;
+
+  renderLog();
+  renderRoster();
+  renderSummary();
+  refreshAbsenceDropdowns();
+
+  const cleared = [];
+  if (unexcluded) cleared.push(`${unexcluded} exclusion${unexcluded !== 1 ? 's' : ''}`);
+  if (unflagged) cleared.push(`${unflagged} Hi-Avail flag${unflagged !== 1 ? 's' : ''}`);
+  alert(`${label} archived.`
+    + (cleared.length ? `\n\nCleared ${cleared.join(' and ')}.` : '')
+    + `\n\nNext: load the new Schedule CSV, then run Sync with Schedule.`);
+}
+
+// ═══════════════════════════════════════════════════════
+//  SUB SCHEDULE PRINT
+// ═══════════════════════════════════════════════════════
+
+function openSubPrint() {
+  const dateStr = document.getElementById('run-date').value;
+  if (!dateStr) { alert('Please run coverage first.'); return; }
+
+  const log = getLog().filter(e => e.date === dateStr);
+  const savedNotes = JSON.parse(localStorage.getItem('cs_notes_' + dateStr) || '{}');
+
+  // Collect outside subs and their periods
+  const subMap = {};
+  log.forEach(e => {
+    if (!e.coveringTeacher) return;
+    const ct = e.coveringTeacher.trim();
+    if (ct.toLowerCase().startsWith('outside sub')) {
+      if (!subMap[ct]) subMap[ct] = [];
+      subMap[ct].push(e);
+    }
+  });
+
+  if (Object.keys(subMap).length === 0) {
+    alert('No outside sub assignments found for this date.');
+    return;
+  }
+
+  const d = new Date(dateStr + 'T00:00:00');
+  const dayLong = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+  const subNames = Object.keys(subMap).sort();
+
+  // Build the full HTML for the new tab
+  let pagesHtml = '';
+  subNames.forEach((subName, subIdx) => {
+    const periods = subMap[subName].slice().sort((a,b) => a.period - b.period);
+    let cardsHtml = '';
+    periods.forEach(entry => {
+      const room = entry.roomNumber ? entry.roomNumber.replace(/^Room\s*/i, '').trim() : '';
+      const section = entry.sectionNumber || '';
+      const periodKey = 'period_' + (entry.absentTeacher || '').replace(/[^a-z0-9]/gi, '_') + '_' + entry.period;
+      const teacherKey = 'teacher_' + (entry.absentTeacher || '').replace(/[^a-z0-9]/gi, '_');
+      const periodNote = (savedNotes[periodKey] || '').trim();
+      const teacherNote = (savedNotes[teacherKey] || '').trim();
+      const combinedNotes = [teacherNote, periodNote].filter(Boolean).join('\n\n');
+      const escStr = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      cardsHtml += `
+        <div style="border:1.5px solid #dde4ed;border-radius:8px;margin-bottom:12px;overflow:hidden">
+          <div style="background:#1a4c9f;color:white;padding:8px 16px;display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:14px;font-weight:bold">Period ${entry.period}</span>
+            ${room ? `<span style="font-size:12px;opacity:0.85">Room ${escStr(room)}</span>` : ''}
+          </div>
+          <div style="padding:10px 16px">
+            <div style="font-size:15px;font-weight:bold;color:#1c212e;margin-bottom:2px">${escStr(entry.courseName||'')}${section ? ' — ' + escStr(section) : ''}</div>
+            <div style="font-size:12px;color:#666;margin-bottom:8px">Covering for: ${escStr(entry.absentTeacher||'')}</div>
+            ${combinedNotes
+              ? `<div style="background:#f7f9fc;border-left:3px solid #6699cc;padding:8px 12px;font-size:13px;color:#333;line-height:1.6;white-space:pre-wrap;border-radius:0 4px 4px 0">${escStr(combinedNotes)}</div>`
+              : `<div style="background:#f7f9fc;border-left:3px solid #dde4ed;padding:8px 12px;font-size:12px;color:#aaa;font-style:italic;border-radius:0 4px 4px 0">No instructions added — check with the department.</div>`}
+          </div>
+        </div>`;
+    });
+
+    const isLast = subIdx === subNames.length - 1;
+    pagesHtml += `
+      <div class="sub-page">
+        <div class="sub-page-inner">
+          <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:20px;padding-bottom:14px;border-bottom:3px solid #1a4c9f">
+            <div>
+              <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:4px">Coverage Assignment</div>
+              <div style="font-size:26px;font-weight:bold;color:#1a4c9f;font-family:Georgia,serif">${subName}</div>
+              <div style="font-size:13px;color:#444;margin-top:4px">${dayLong}</div>
+            </div>
+            <div style="text-align:right;font-size:12px;color:#666">${periods.length} period${periods.length !== 1 ? 's' : ''}</div>
+          </div>
+          ${cardsHtml}
+          <div style="margin-top:20px;padding-top:10px;border-top:1px solid #dde4ed;font-size:11px;color:#aaa;display:flex;justify-content:space-between">
+            <span>Questions? Contact the main office.</span>
+            <span>${dayLong}</span>
+          </div>
+        </div>
+      </div>`;
+  });
+
+  const fullHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sub Schedule — ${dayLong}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Georgia, serif; background: #e8edf4; color: #1c212e; }
+
+  /* ── Screen: each sub fills the viewport ── */
+  .sub-page {
+    width: 720px;
+    margin: 32px auto;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+    overflow: hidden;
+  }
+  .sub-page-inner {
+    padding: 36px 40px 28px;
+    transform-origin: top left;
+    /* JS will set transform: scale() here */
+  }
+
+  /* ── Print: one sub per page, scaled to fit ── */
+  @media print {
+    body { background: white; }
+    @page { size: letter; margin: 0.6in; }
+    .print-bar { display: none !important; }
+    .sub-page {
+      width: 100%;
+      margin: 0;
+      box-shadow: none;
+      border-radius: 0;
+      page-break-after: always;
+      overflow: visible;
+    }
+    .sub-page:last-child { page-break-after: avoid; }
+    .sub-page-inner {
+      /* JS sets the same scale for print */
+      padding: 0;
+    }
+  }
+
+  /* ── Print bar ── */
+  .print-bar {
+    position: fixed; top: 0; left: 0; right: 0;
+    background: #1a4c9f; color: white; padding: 10px 24px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: sans-serif; font-size: 13px; z-index: 100;
+  }
+  .print-bar button {
+    background: #f7cb57; color: #1c212e; border: none; padding: 7px 18px;
+    border-radius: 6px; font-weight: 700; font-size: 13px; cursor: pointer;
+  }
+  .content { padding-top: 64px; padding-bottom: 32px; }
+  @media print { .content { padding: 0; } }
+</style>
+</head>
+<body>
+<div class="print-bar">
+  <span>Sub Schedule — ${dayLong}</span>
+  <button onclick="window.print()">Print / Save as PDF</button>
+</div>
+<div class="content">
+  ${pagesHtml}
+</div>
+<script>
+// Scale each sub-page-inner so its content fits within the printable page height.
+// Print page height at 0.6in margins on letter = 11 - 1.2 = 9.8in = ~940px at 96dpi
+// We target that as our max content height.
+(function() {
+  const MAX_H = 940; // px equivalent of one print page body
+  document.querySelectorAll('.sub-page-inner').forEach(function(inner) {
+    var h = inner.scrollHeight;
+    if (h > MAX_H) {
+      var scale = MAX_H / h;
+      inner.style.transform = 'scale(' + scale + ')';
+      inner.style.width = (100 / scale) + '%';
+      // Collapse the outer height so pages don't leave a gap
+      inner.parentElement.style.height = (h * scale) + 'px';
+      inner.parentElement.style.overflow = 'hidden';
+    }
+  });
+})();
+<\/script>
+</body>
+</html>`;
+
+  const tab = window.open('', '_blank');
+  if (tab) {
+    tab.document.write(fullHtml);
+    tab.document.close();
+  } else {
+    alert('Pop-up blocked. Please allow pop-ups for this page and try again.');
+  }
+}
+
+function closeSubPrint() {
+  document.getElementById('sub-print-overlay').classList.remove('open');
+}
+
+// ═══════════════════════════════════════════════════════
+//  UTILS
+// ═══════════════════════════════════════════════════════
+
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── IMPORT (RESTORE FROM BACKUP) ────────────────────
+
+async function importAllData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  event.target.value = '';
+
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    try {
+      const payload = JSON.parse(e.target.result);
+      if (!payload.roster || !payload.log) {
+        alert('This does not appear to be a valid coverage backup file.');
+        return;
+      }
+
+      if (!confirm(`This will replace all current data with the backup from ${payload.exportedAt?.slice(0,10) || 'unknown date'}.\n\nContinue?`)) return;
+
+      showLoading('Restoring data...');
+
+      if (STORAGE_MODE === 'local') {
+        // Restore to localStorage
+        setData('cs_roster', payload.roster);
+        setData('cs_log', payload.log);
+        if (payload.schedule) setData('cs_schedule', payload.schedule);
+        if (payload.emailTemplate) localStorage.setItem('cs_email_template', payload.emailTemplate);
+        // Restore per-date absences
+        Object.entries(payload.absences || {}).forEach(([date, abs]) => {
+          setData('cs_absences_' + date, abs);
+        });
+        // Restore notes
+        Object.entries(payload.notes || {}).forEach(([date, notes]) => {
+          localStorage.setItem('cs_notes_' + date, JSON.stringify(notes));
+        });
+        // Restore outside sub counts
+        Object.entries(payload.outsideSubCounts || {}).forEach(([date, count]) => {
+          setData('cs_outsidesubcount_' + date, count);
+        });
+      } else {
+        // SharePoint mode: write each collection to SP lists
+        // Roster
+        const existingTeachers = await spGet('Teachers');
+        for (const t of existingTeachers) await spDelete('Teachers', t.id || t.Id);
+        for (const t of payload.roster) {
+          const created = await spPost('Teachers', teacherToSP(t));
+          t._spId = created.id || created.Id;
+        }
+        _spCache.roster = payload.roster;
+
+        // Log
+        const existingLog = await spGet('CoverageLog');
+        for (const e of existingLog) await spDelete('CoverageLog', e.id || e.Id);
+        for (const entry of payload.log) {
+          const created = await spPost('CoverageLog', logEntryToSP(entry));
+          entry._spId = created.id || created.Id;
+        }
+        _spCache.log = payload.log;
+
+        // Absences
+        const existingAbs = await spGet('Absences');
+        for (const a of existingAbs) await spDelete('Absences', a.id || a.Id);
+        for (const [date, absences] of Object.entries(payload.absences || {})) {
+          for (const a of absences) await spPost('Absences', absenceToSP(date, a));
+        }
+
+        // Schedule
+        if (payload.schedule) {
+          scheduleData = payload.schedule;
+          await saveScheduleToSP();
+        }
+      }
+
+      hideLoading();
+      // Reload UI
+      await initData();
+      renderRoster();
+      renderLog();
+      renderAbsencesTable();
+      alert('Restore complete!');
+    } catch(err) {
+      hideLoading();
+      alert('Could not restore data: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function exportAllData(label) {
+  const today = todayStr();
+
+  // Collect all absence keys from localStorage
+  const absences = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('cs_absences_')) {
+      const dateStr = key.replace('cs_absences_', '');
+      try { absences[dateStr] = JSON.parse(localStorage.getItem(key)); } catch {}
+    }
+  }
+
+  // Collect all notes keys
+  const notes = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('cs_notes_')) {
+      const dateStr = key.replace('cs_notes_', '');
+      try { notes[dateStr] = JSON.parse(localStorage.getItem(key)); } catch {}
+    }
+  }
+
+  // Collect outside sub counts
+  const outsideSubCounts = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('cs_outsidesubcount_')) {
+      const dateStr = key.replace('cs_outsidesubcount_', '');
+      try { outsideSubCounts[dateStr] = JSON.parse(localStorage.getItem(key)); } catch {}
+    }
+  }
+
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    exportedFrom: window.location.href,
+    version: '1.0',
+    roster: getRoster(),
+    log: getLog(),
+    schedule: getData('cs_schedule', {}),
+    emailTemplate: localStorage.getItem('cs_email_template') || '',
+    absences,
+    notes,
+    outsideSubCounts,
+  };
+
+  const json = JSON.stringify(payload, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = label ? `coverage backup ${label}.json` : `coverage_backup_${todayStr()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+// ═══════════════════════════════════════════════════════
+//  AVAILABILITY PANEL
+// ═══════════════════════════════════════════════════════
+
+function showAvailPanel() {
+  const dateStr = document.getElementById('run-date').value;
+  if (!dateStr) { alert('Please select a date first.'); return; }
+
+  const d = new Date(dateStr + 'T00:00:00');
+  const dayName = d.toLocaleDateString('en-US', { weekday: 'long' });
+  const dayShort = d.toLocaleDateString('en-US', { weekday: 'long', month: 'numeric', day: 'numeric' });
+
+  const roster = getRoster();
+  const weeklyCounts = getWeeklyCounts(dateStr);
+  const absentTeachers = new Set(
+    document.querySelectorAll('.abs-teacher')
+      ? Array.from(document.querySelectorAll('.abs-teacher')).map(s => s.value).filter(Boolean)
+      : []
+  );
+
+  // Group by period
+  const byPeriod = {};
+  PERIODS.forEach(p => { byPeriod[p] = []; });
+
+  roster.forEach(t => {
+    if (t.excluded) return;
+    const avail = t.avail[dayName];
+    const periods = avail instanceof Set ? avail : new Set(avail || []);
+    periods.forEach(p => {
+      if (byPeriod[p]) byPeriod[p].push(t);
+    });
+  });
+
+  const tierOrder = { '1': 0, '2': 1, '3': 2, 'E': 3 };
+
+  let html = '<table style="font-size:12px;width:100%"><thead><tr><th>Period</th><th>Available Teachers</th><th style="text-align:center">Count</th></tr></thead><tbody>';
+  PERIODS.forEach(p => {
+    const teachers = byPeriod[p].slice().sort((a, b) => {
+      const ta = tierOrder[a.tier] ?? 9;
+      const tb = tierOrder[b.tier] ?? 9;
+      if (ta !== tb) return ta - tb;
+      return (weeklyCounts[a.name] || 0) - (weeklyCounts[b.name] || 0);
+    });
+    const chips = teachers.map(t => {
+      const isAbsent = absentTeachers.has(t.name);
+      const wk = weeklyCounts[t.name] || 0;
+      const bg = isAbsent ? 'var(--red-light)' : t.tier === '1' ? 'var(--light-blue-bg)' : t.tier === '2' ? 'var(--green-light)' : t.tier === '3' ? 'var(--amber-light)' : 'var(--red-light)';
+      const color = isAbsent ? 'var(--red)' : t.tier === '1' ? 'var(--navy)' : t.tier === '2' ? 'var(--green)' : t.tier === '3' ? 'var(--amber)' : 'var(--red)';
+      const strike = isAbsent ? 'text-decoration:line-through;' : '';
+      const title = `${t.name} — Tier ${t.tier} — ${wk} coverage${wk !== 1 ? 's' : ''} this week — Last: ${t.lastCoverageDate || 'never'}`;
+      return `<span title="${esc(title)}" style="display:inline-block;${strike}background:${bg};color:${color};border-radius:4px;padding:2px 7px;margin:2px;font-size:11px;font-weight:600">${esc(t.name)}</span>`;
+    }).join('');
+    const available = teachers.filter(t => !absentTeachers.has(t.name)).length;
+    html += `<tr><td style="font-weight:700;text-align:center;width:60px">${p}</td><td>${chips || '<span style="color:var(--gray-400);font-size:11px">None available</span>'}</td><td style="text-align:center;font-weight:600;color:${available < 2 ? 'var(--red)' : 'var(--green)'}">${available}</td></tr>`;
+  });
+  html += '</tbody></table>';
+
+  document.getElementById('avail-panel-date').textContent = '— ' + dayShort;
+  document.getElementById('avail-panel-body').innerHTML = html;
+  document.getElementById('avail-panel').style.display = 'block';
+  document.getElementById('avail-panel').scrollIntoView({ behavior: 'smooth' });
+}
+
+// ═══════════════════════════════════════════════════════
+//  WEEKLY COVERAGE GRID
+// ═══════════════════════════════════════════════════════
+
+function renderWeeklyGrid() {
+  const dateInput = document.getElementById('weekly-grid-date');
+  if (!dateInput.value) dateInput.value = todayStr();
+  const dateStr = dateInput.value;
+
+  const { start, end } = getWeekBounds(dateStr);
+  const weekDates = [];
+  const dayNames = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
+  for (let i = 0; i < 5; i++) {
+    const d = new Date(start + 'T00:00:00');
+    d.setDate(d.getDate() + i);
+    weekDates.push({ dateStr: d.toISOString().slice(0,10), dayName: dayNames[i], short: d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }) });
+  }
+
+  const log = getLog();
+  const roster = getRoster();
+  const tierOrder = { '1': 0, '2': 1, '3': 2, 'E': 3 };
+
+  // Build lookup: teacher -> date -> list of absent teachers covered
+  const covered = {};
+  log.forEach(e => {
+    if (!e.date || e.date < start || e.date > end) return;
+    const ct = (e.coveringTeacher || '').replace(' (Emergency)', '').trim();
+    if (!ct || isSpecialLabel(ct)) return;
+    if (!covered[ct]) covered[ct] = {};
+    if (!covered[ct][e.date]) covered[ct][e.date] = [];
+    covered[ct][e.date].push(e.absentTeacher);
+  });
+
+  // Only show teachers who covered this week or are on roster
+  const sorted = [...roster].sort((a, b) => {
+    const ta = tierOrder[a.tier] ?? 9;
+    const tb = tierOrder[b.tier] ?? 9;
+    return ta !== tb ? ta - tb : a.name.localeCompare(b.name);
+  });
+
+  let html = '<table style="font-size:12px;width:100%;border-collapse:collapse"><thead><tr>';
+  html += '<th style="text-align:left;padding:8px 10px;min-width:140px">Teacher</th><th style="text-align:center;padding:8px 4px;width:30px">Tier</th>';
+  weekDates.forEach(wd => {
+    html += `<th style="text-align:center;padding:8px 6px;min-width:100px">${wd.dayName.slice(0,3)}<br><span style="font-weight:400;color:var(--gray-400)">${wd.short}</span></th>`;
+  });
+  html += '<th style="text-align:center;padding:8px 6px">Week Total</th></tr></thead><tbody>';
+
+  sorted.forEach(t => {
+    const weekTotal = weekDates.reduce((sum, wd) => sum + (covered[t.name]?.[wd.dateStr]?.length || 0), 0);
+    html += `<tr style="border-top:1px solid var(--gray-100)">`;
+    html += `<td style="padding:7px 10px;font-weight:600">${esc(t.name)}${t.excluded ? ' <span style="font-size:10px;color:var(--red)">(excl)</span>' : ''}</td>`;
+    html += `<td style="text-align:center;padding:7px 4px"><div class="tier-chip tier-${t.tier.toLowerCase()}">${t.tier}</div></td>`;
+    weekDates.forEach(wd => {
+      const entries = covered[t.name]?.[wd.dateStr] || [];
+      if (entries.length === 0) {
+        html += `<td style="text-align:center;padding:7px 6px;color:var(--gray-200)">-</td>`;
+      } else {
+        const names = [...new Set(entries)].map(n => `<span style="display:block;font-size:10px;color:var(--gray-600)">${esc(n)}</span>`).join('');
+        html += `<td style="text-align:center;padding:7px 6px;background:var(--light-blue-bg)"><span style="font-weight:700;color:var(--navy)">${entries.length}</span>${names}</td>`;
+      }
+    });
+    html += `<td style="text-align:center;padding:7px 6px;font-weight:700;color:${weekTotal > 0 ? 'var(--navy)' : 'var(--gray-400)'}">${weekTotal || '-'}</td>`;
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  document.getElementById('weekly-grid-body').innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════
+//  ROOM CHART
+// ═══════════════════════════════════════════════════════
+
+// roomChartData: { 'SCI 8-1': { 'Monday-2': '309', 'Wednesday-1': '324', ... } }
+let roomChartData = {};
+
+const ROOM_CHART_DAY_MAP = { M: 'Monday', T: 'Tuesday', W: 'Wednesday', R: 'Thursday', F: 'Friday' };
+
+function getRoomFromChart(classId, day, period) {
+  if (!classId || !day || !period) return '';
+  const classEntry = roomChartData[classId.trim()];
+  if (!classEntry) return '';
+  return classEntry[`${day}-${period}`] || '';
+}
+
+function saveSeniorClassesFlag() {
+  const val = document.getElementById('senior-classes-ended')?.checked;
+  localStorage.setItem('cs_senior_ended', val ? '1' : '0');
+}
+
+function loadSeniorClassesFlag() {
+  const val = localStorage.getItem('cs_senior_ended');
+  const cb = document.getElementById('senior-classes-ended');
+  if (cb && val !== null) cb.checked = val === '1';
+}
+
+function loadRoomChartFromStorage() {
+  try {
+    const stored = localStorage.getItem('cs_roomchart');
+    if (stored) {
+      roomChartData = JSON.parse(stored);
+      const count = Object.keys(roomChartData).length;
+      if (count > 0) {
+        document.getElementById('roomchart-status').textContent = `✓ ${count} classes in room chart`;
+      }
+    }
+  } catch(e) {}
+}
+
+function loadRoomChartCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const text = e.target.result;
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+
+      // Parse header row: CAP,,M1,M2,...,T1,T2,...
+      const headers = parseCSVLine(lines[0]);
+
+      // Build column index: col index -> { day, period }
+      const colMap = {};
+      headers.forEach((h, i) => {
+        const match = h.trim().match(/^([MTWRF])(\d)$/i);
+        if (match) {
+          const day = ROOM_CHART_DAY_MAP[match[1].toUpperCase()];
+          const period = parseInt(match[2]);
+          if (day && period) colMap[i] = { day, period };
+        }
+      });
+
+      roomChartData = {};
+      let classCount = 0;
+
+      for (let i = 1; i < lines.length; i++) {
+        const cols = parseCSVLine(lines[i]);
+        const roomNumber = (cols[1] || '').trim();
+        if (!roomNumber) continue;
+
+        // Each non-empty cell in a period column is a class ID in that room that period
+        Object.entries(colMap).forEach(([colIdx, { day, period }]) => {
+          const classId = (cols[colIdx] || '').trim();
+          if (!classId) return;
+          if (!roomChartData[classId]) { roomChartData[classId] = {}; classCount++; }
+          roomChartData[classId][`${day}-${period}`] = roomNumber;
+        });
+      }
+
+      localStorage.setItem('cs_roomchart', JSON.stringify(roomChartData));
+      document.getElementById('roomchart-status').textContent = `✓ ${classCount} classes in room chart`;
+      showImportAlert('success', `Room chart loaded: ${classCount} class sections mapped.`);
+
+      // Re-apply to existing schedule data if loaded
+      if (Object.keys(scheduleData).length > 0) {
+        Object.values(scheduleData).forEach(classes => {
+          classes.forEach(c => {
+            const chartRoom = getRoomFromChart(c.section, c.day, c.period);
+            if (chartRoom) c.room = chartRoom;
+          });
+        });
+        saveScheduleToStorage();
+        showImportAlert('success', `Room chart loaded and applied to existing schedule.`);
+      }
+    } catch(err) {
+      showImportAlert('error', 'Could not parse room chart CSV: ' + err.message);
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+// ═══════════════════════════════════════════════════════
+//  GRADE 12 TEMPORARY PERIODS
+// ═══════════════════════════════════════════════════════
+
+function isTempPeriod(teacher, period, day) {
+  if (!teacher.tempPeriods || !teacher.tempPeriods.length) return false;
+  return teacher.tempPeriods.some(tp => tp.period === period && tp.day === day);
+}
+
+function openGrade12TempModal() {
+  const roster = getRoster();
+  const body = document.getElementById('grade12-temp-body');
+
+  // Find all grade 12 classes per teacher from scheduleData
+  const grade12ByTeacher = {};
+  Object.entries(scheduleData).forEach(([teacher, classes]) => {
+    classes.forEach(c => {
+      const isGrade12 = /\b12\b/.test(c.section) || /\b12\b/.test(c.courseName);
+      if (!isGrade12) return;
+      if (!grade12ByTeacher[teacher]) grade12ByTeacher[teacher] = [];
+      grade12ByTeacher[teacher].push(c);
+    });
+  });
+
+  if (Object.keys(grade12ByTeacher).length === 0) {
+    body.innerHTML = '<p style="color:var(--gray-400);font-size:13px">No grade 12 classes found in the loaded schedule.</p>';
+    document.getElementById('grade12-temp-modal').classList.add('open');
+    return;
+  }
+
+  body.innerHTML = Object.entries(grade12ByTeacher).sort((a,b) => a[0].localeCompare(b[0])).map(([teacher, classes]) => {
+    const t = roster.find(r => r.name === teacher);
+    const tempSet = new Set((t?.tempPeriods || []).map(tp => `${tp.day}-${tp.period}`));
+    const rows = classes.map(c => {
+      const key = `${c.day}-${c.period}`;
+      const checked = tempSet.has(key) ? 'checked' : '';
+      return `<label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;cursor:pointer">
+        <input type="checkbox" class="g12-check" data-teacher="${esc(teacher)}" data-day="${esc(c.day)}" data-period="${c.period}" ${checked} />
+        ${c.day} Period ${c.period} — ${esc(c.courseName)}
+      </label>`;
+    }).join('');
+    return `<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--gray-100)">
+      <div style="font-weight:600;font-size:13px;margin-bottom:4px">${esc(teacher)}</div>
+      ${rows}
+    </div>`;
+  }).join('');
+
+  document.getElementById('grade12-temp-modal').classList.add('open');
+}
+
+function applyGrade12TempPeriods() {
+  const roster = getRoster();
+  const checks = document.querySelectorAll('.g12-check');
+
+  // Group checked periods by teacher
+  const byTeacher = {};
+  checks.forEach(cb => {
+    const teacher = cb.dataset.teacher;
+    if (!byTeacher[teacher]) byTeacher[teacher] = [];
+    if (cb.checked) byTeacher[teacher].push({ day: cb.dataset.day, period: parseInt(cb.dataset.period) });
+  });
+
+  roster.forEach(t => {
+    if (byTeacher[t.name] !== undefined) {
+      t.tempPeriods = byTeacher[t.name];
+    }
+  });
+
+  setRoster(roster);
+  document.getElementById('grade12-temp-modal').classList.remove('open');
+  renderRoster();
+  alert('Temporary periods saved.');
+}
+
+function clearAllTempPeriods() {
+  if (!confirm('Clear all temporary period flags for all teachers?')) return;
+  const roster = getRoster();
+  roster.forEach(t => { t.tempPeriods = []; });
+  setRoster(roster);
+  document.getElementById('grade12-temp-modal').classList.remove('open');
+  renderRoster();
+  alert('All temporary periods cleared.');
+}
+
+
+function renderScheduleInspector() {
+  const search = (document.getElementById('schedule-inspector-search')?.value || '').toLowerCase();
+  const tbody = document.getElementById('schedule-inspector-tbody');
+  const rows = [];
+
+  // Populate teacher dropdown
+  const teacherSel = document.getElementById('si-add-teacher');
+  if (teacherSel) {
+    const current = teacherSel.value;
+    const names = Object.keys(scheduleData).concat(getRoster().map(t => t.name));
+    const unique = [...new Set(names)].sort();
+    teacherSel.innerHTML = '<option value="">Select...</option>' + unique.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    if (current) teacherSel.value = current;
+  }
+
+  Object.entries(scheduleData).forEach(([teacher, classes]) => {
+    classes.forEach((c, classIdx) => {
+      if (search && !teacher.toLowerCase().includes(search) && !c.section.toLowerCase().includes(search) && !c.courseName.toLowerCase().includes(search)) return;
+      const chartRoom = getRoomFromChart(c.section, c.day, c.period);
+      const mismatch = chartRoom && chartRoom !== c.room;
+      rows.push({ teacher, classIdx, ...c, chartRoom, mismatch });
+    });
+  });
+
+  rows.sort((a, b) => a.teacher.localeCompare(b.teacher) || a.day.localeCompare(b.day) || a.period - b.period);
+  document.getElementById('schedule-inspector-count').textContent = rows.length;
+
+  const days = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
+  const periods = [1,2,3,4,5,6,7];
+
+  tbody.innerHTML = rows.map((r, i) => `
+    <tr id="si-row-${i}" style="${r.mismatch ? 'background:var(--amber-light)' : ''}">
+      <td>${esc(r.teacher)}</td>
+      <td style="font-weight:600">${esc(r.section)}</td>
+      <td>${esc(r.courseName)}</td>
+      <td>${esc(r.day)}</td>
+      <td style="text-align:center">${r.period}</td>
+      <td style="${r.mismatch ? 'color:var(--red);text-decoration:line-through' : ''}">${esc(r.room) || '—'}</td>
+      <td style="font-weight:600;color:${r.chartRoom ? 'var(--green)' : 'var(--gray-400)'}">${esc(r.chartRoom) || '—'}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px" onclick="scheduleEditRow(${i}, ${JSON.stringify(r).replace(/"/g,'&quot;')})">Edit</button>
+        <button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px;color:var(--red)" onclick="scheduleRemoveClass('${esc(r.teacher)}', ${r.classIdx})">Remove</button>
+      </td>
+    </tr>
+    <tr id="si-edit-${i}" style="display:none;background:var(--gray-100)">
+      <td colspan="8" style="padding:10px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 80px 1fr auto;gap:8px;align-items:end">
+          <div><label style="font-size:11px">Class ID</label><input id="si-e-section-${i}" value="${esc(r.section)}" style="width:100%" /></div>
+          <div><label style="font-size:11px">Course</label><input id="si-e-course-${i}" value="${esc(r.courseName)}" style="width:100%" /></div>
+          <div><label style="font-size:11px">Day</label><select id="si-e-day-${i}" style="width:100%">${days.map(d => `<option value="${d}" ${d===r.day?'selected':''}>${d}</option>`).join('')}</select></div>
+          <div><label style="font-size:11px">Period</label><select id="si-e-period-${i}" style="width:100%">${periods.map(p => `<option value="${p}" ${p===r.period?'selected':''}>${p}</option>`).join('')}</select></div>
+          <div><label style="font-size:11px">Room</label><input id="si-e-room-${i}" value="${esc(r.room)}" style="width:100%" /></div>
+          <div style="display:flex;gap:6px;align-items:flex-end">
+            <button class="btn btn-primary btn-sm" onclick="scheduleSaveEdit(${i}, '${esc(r.teacher)}', ${r.classIdx})">Save</button>
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('si-edit-${i}').style.display='none';document.getElementById('si-row-${i}').style.display=''">Cancel</button>
+          </div>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+//  SCHEDULE EDITOR
+// ═══════════════════════════════════════════════════════
+
+function scheduleAddClass() {
+  const teacher = document.getElementById('si-add-teacher').value.trim();
+  const section = document.getElementById('si-add-section').value.trim();
+  const courseName = document.getElementById('si-add-course').value.trim();
+  const day = document.getElementById('si-add-day').value;
+  const period = parseInt(document.getElementById('si-add-period').value);
+  const roomInput = document.getElementById('si-add-room').value.trim();
+
+  if (!teacher || !section || !courseName || !day || !period) {
+    alert('Please fill in Teacher, Class ID, Course Name, Day, and Period.');
+    return;
+  }
+
+  const room = getRoomFromChart(section, day, period) || roomInput;
+  if (!scheduleData[teacher]) scheduleData[teacher] = [];
+  scheduleData[teacher].push({ day, period, courseName, section, room });
+  saveScheduleToStorage();
+
+  // Clear form
+  document.getElementById('si-add-section').value = '';
+  document.getElementById('si-add-course').value = '';
+  document.getElementById('si-add-room').value = '';
+
+  renderScheduleInspector();
+  refreshAbsenceDropdowns();
+}
+
+function scheduleEditRow(rowIdx, r) {
+  document.getElementById('si-row-' + rowIdx).style.display = 'none';
+  document.getElementById('si-edit-' + rowIdx).style.display = '';
+}
+
+function scheduleSaveEdit(rowIdx, teacher, classIdx) {
+  const section = document.getElementById('si-e-section-' + rowIdx).value.trim();
+  const courseName = document.getElementById('si-e-course-' + rowIdx).value.trim();
+  const day = document.getElementById('si-e-day-' + rowIdx).value;
+  const period = parseInt(document.getElementById('si-e-period-' + rowIdx).value);
+  const roomInput = document.getElementById('si-e-room-' + rowIdx).value.trim();
+
+  if (!section || !courseName || !day || !period) {
+    alert('Class ID, Course, Day, and Period are required.');
+    return;
+  }
+
+  const room = getRoomFromChart(section, day, period) || roomInput;
+  if (scheduleData[teacher] && scheduleData[teacher][classIdx] !== undefined) {
+    scheduleData[teacher][classIdx] = { day, period, courseName, section, room };
+    saveScheduleToStorage();
+  }
+  renderScheduleInspector();
+  refreshAbsenceDropdowns();
+}
+
+function scheduleRemoveClass(teacher, classIdx) {
+  if (!confirm('Remove this class from the schedule?')) return;
+  if (scheduleData[teacher]) {
+    scheduleData[teacher].splice(classIdx, 1);
+    if (scheduleData[teacher].length === 0) delete scheduleData[teacher];
+    saveScheduleToStorage();
+  }
+  renderScheduleInspector();
+  refreshAbsenceDropdowns();
+}
+
+
+function renderRoomChartInspector() {
+  const search = (document.getElementById('roomchart-inspector-search')?.value || '').toLowerCase();
+  const tbody = document.getElementById('roomchart-inspector-tbody');
+  const rows = [];
+
+  const dayOrder = { Monday:0, Tuesday:1, Wednesday:2, Thursday:3, Friday:4 };
+
+  Object.entries(roomChartData).forEach(([classId, slots]) => {
+    Object.entries(slots).forEach(([key, room]) => {
+      const [day, period] = key.split('-');
+      if (search && !classId.toLowerCase().includes(search) && !room.toLowerCase().includes(search)) return;
+      rows.push({ classId, day, period: parseInt(period), room });
+    });
+  });
+
+  rows.sort((a, b) => a.classId.localeCompare(b.classId) || (dayOrder[a.day] ?? 9) - (dayOrder[b.day] ?? 9) || a.period - b.period);
+  document.getElementById('roomchart-inspector-count').textContent = rows.length;
+
+  tbody.innerHTML = rows.map(r => `<tr>
+    <td style="font-weight:600">${esc(r.classId)}</td>
+    <td>${esc(r.day)}</td>
+    <td style="text-align:center">${r.period}</td>
+    <td>${esc(r.room)}</td>
+  </tr>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+//  DATA MENU
+// ═══════════════════════════════════════════════════════
+
+function toggleDataMenu() {
+  const menu = document.getElementById('data-menu');
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+document.addEventListener('click', function(e) {
+  const btn = document.getElementById('data-menu-btn');
+  const menu = document.getElementById('data-menu');
+  if (menu && btn && !btn.contains(e.target) && !menu.contains(e.target)) {
+    menu.style.display = 'none';
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+//  MANUAL MODE
+// ═══════════════════════════════════════════════════════
+
+function toggleManualMode() {
+  const body = document.getElementById('manual-body');
+  const label = document.getElementById('manual-toggle-label');
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  label.textContent = isOpen ? 'Show' : 'Hide';
+  if (!isOpen) {
+    const dateInput = document.getElementById('manual-date');
+    if (!dateInput.value) dateInput.value = document.getElementById('run-date').value || todayStr();
+    renderManualTable();
+  }
+}
+
+function renderManualTable() {
+  const dateStr = document.getElementById('manual-date').value;
+  if (!dateStr) return;
+
+  const d = new Date(dateStr + 'T00:00:00');
+  const dayName = d.toLocaleDateString('en-US', { weekday: 'long' });
+  const roster = getRoster();
+  const weeklyCounts = getWeeklyCounts(dateStr);
+  const absentTeachers = new Set(
+    getAbsencesByDate(dateStr).map(a => a.teacher).filter(Boolean)
+  );
+
+  const tierOrder = { '1':0, '2':1, '3':2, 'E':3 };
+
+  let html = '<table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr>';
+  html += '<th style="text-align:left;padding:8px 10px;border-bottom:2px solid var(--gray-200)">Period</th>';
+  html += '<th style="text-align:left;padding:8px 10px;border-bottom:2px solid var(--gray-200)">Assign to</th>';
+  html += '<th style="text-align:left;padding:8px 10px;border-bottom:2px solid var(--gray-200)">Available teachers</th>';
+  html += '</tr></thead><tbody>';
+
+  PERIODS.forEach(period => {
+    const available = roster.filter(t => {
+      if (t.tier === 'E') return false;   // emergency pool is Override only
+      if (t.excluded) return false;
+      if (absentTeachers.has(t.name)) return false;
+      const avail = t.avail[dayName];
+      const periods = avail instanceof Set ? avail : new Set(avail || []);
+      return periods.has(period);
+    }).sort((a, b) => (tierOrder[a.tier] ?? 9) - (tierOrder[b.tier] ?? 9) || (weeklyCounts[a.name]||0) - (weeklyCounts[b.name]||0));
+
+    const options = `<option value="">— unassigned —</option>`
+      + available.map(t => `<option value="${esc(t.name)}">${esc(t.name)} (T${t.tier}, ${weeklyCounts[t.name]||0}x)</option>`).join('');
+
+    const chips = available.map(t =>
+      `<span style="font-size:11px;background:var(--gray-100);border-radius:3px;padding:2px 6px;margin:2px;display:inline-block">${esc(t.name)}</span>`
+    ).join('');
+
+    html += `<tr style="border-bottom:1px solid var(--gray-100)">
+      <td style="padding:9px 10px;font-weight:700;text-align:center;width:60px">${period}</td>
+      <td style="padding:9px 10px;width:220px">
+        <select id="manual-assign-${period}" style="width:100%;font-size:12px">${options}</select>
+      </td>
+      <td style="padding:9px 10px">${chips || '<span style="color:var(--gray-400);font-size:11px">None available, contact an administrator</span>'}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  document.getElementById('manual-table').innerHTML = html;
+}
+
+function getManualText() {
+  const dateStr = document.getElementById('manual-date').value;
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  const dayLong = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  let lines = [`Coverage — ${dayLong}`, 'Manual Mode', ''];
+  PERIODS.forEach(period => {
+    const sel = document.getElementById(`manual-assign-${period}`);
+    const val = sel ? sel.value : '';
+    lines.push(`Period ${period}: ${val || 'UNASSIGNED'}`);
+  });
+  return lines.join('\n');
+}
+
+function copyManualOutput() {
+  const text = getManualText();
+  if (!text) { alert('Please load a date first.'); return; }
+  navigator.clipboard.writeText(text).then(() => alert('Copied to clipboard.'))
+    .catch(() => { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); alert('Copied to clipboard.'); });
+}
+
+function downloadManualOutput() {
+  const text = getManualText();
+  if (!text) { alert('Please load a date first.'); return; }
+  const dateStr = document.getElementById('manual-date').value;
+  const blob = new Blob([text], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `coverage-manual-${dateStr}.txt`;
+  a.click(); URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
