@@ -1949,6 +1949,35 @@ function mergeAbsencesIntoDate(d, engineAbsences) {
   return engineAbsencesFromStorage(merged);
 }
 
+// A teacher's real scheduled class for one day+period, from the loaded
+// Schedule CSV. Same lookup Out All Week uses. Null if nothing is
+// scheduled there (a free period, or the teacher/row isn't in the
+// loaded schedule at all).
+function scheduledClassFor(teacherName, dayName, period) {
+  const classes = scheduleData[teacherName];
+  if (!classes) return null;
+  const match = classes.find(c => c.day === dayName && c.period === period);
+  if (!match) return null;
+  return { courseName: match.courseName || '', section: match.section || '', room: match.room || '' };
+}
+
+// For a later day in a range run: re-derives each row's course/section/room
+// from that day's real schedule instead of blindly repeating day one's
+// values, since the same teacher can teach a different class in the same
+// period on a different day. Falls back to day one's values (flagged as
+// `_notScheduled`) only when the loaded schedule has no matching class —
+// e.g. no schedule loaded, or a manually-typed row that isn't in it.
+function rowsForRangeDay(baseAbsences, dayName) {
+  const unmatched = [];
+  const rows = baseAbsences.map(a => {
+    const real = scheduledClassFor(a.absentTeacher, dayName, a.period);
+    if (real) return { ...a, courseName: real.courseName, sectionNumber: real.section, roomNumber: real.room };
+    unmatched.push({ absentTeacher: a.absentTeacher, period: a.period });
+    return { ...a };
+  });
+  return { rows, unmatched };
+}
+
 // ═══════════════════════════════════════════════════════
 //  ASSIGNMENT ENGINE
 // ═══════════════════════════════════════════════════════
@@ -2225,12 +2254,23 @@ async function runCoverage() {
     : 'Run Coverage — ' + dateStr);
 
   let primaryResult = null;
+  const unmatchedByDate = []; // rows on a later day with no scheduled match, copied from day one instead
   for (let i = 0; i < dateList.length; i++) {
     const d = dateList[i];
-    // Day 1 uses the rows exactly as entered. Later days merge the same
-    // rows into whatever that day already has on its own, so an absence
-    // already entered separately for a later day isn't lost.
-    const dayAbsences = i === 0 ? absences : mergeAbsencesIntoDate(d, absences);
+    // Day 1 uses the rows exactly as entered. Later days re-derive each
+    // row's course/section/room from that day's own real schedule (a
+    // teacher can teach something different in the same period on a
+    // different day), merged into whatever `d` already has on its own so
+    // an absence entered separately for that day isn't lost.
+    let dayAbsences;
+    if (i === 0) {
+      dayAbsences = absences;
+    } else {
+      const dayName = new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
+      const { rows, unmatched } = rowsForRangeDay(absences, dayName);
+      if (unmatched.length) unmatchedByDate.push({ date: d, rows: unmatched });
+      dayAbsences = mergeAbsencesIntoDate(d, rows);
+    }
     if (i > 0) setData('cs_outsidesubcount_' + d, outsideSubCount);
 
     const { assignments, newEntries, unassigned, conflicts, lockedCount } = assignCoverage(dayAbsences, d, outsideSubCount);
@@ -2268,6 +2308,12 @@ async function runCoverage() {
   document.getElementById('output-area').style.display = 'block';
   document.getElementById('output-area').scrollIntoView({ behavior: 'smooth' });
 
+  if (unmatchedByDate.length > 0) {
+    const lines = unmatchedByDate.map(u =>
+      `${u.date}: ` + u.rows.map(r => `${r.absentTeacher} P${r.period}`).join(', ')
+    );
+    alert(`No scheduled class was found for these, so the course/room from ${dateStr} was copied instead. Double-check them:\n\n` + lines.join('\n'));
+  }
   if (dateList.length > 1) {
     showImportAlert('success', `Coverage run for ${dateList.length} school days (${dateStr} → ${dateList[dateList.length - 1]}). Switch the date above to each of the other days and click Run Coverage again to view, print, or email that day's plan — it's already locked in and won't be reassigned.`);
   }
