@@ -643,7 +643,10 @@
 <body>
 
 <div class="header">
-  <div class="header-title">Coverage <span>System</span></div>
+  <div style="display:flex;align-items:center;gap:14px">
+    <div class="header-title">Coverage <span>System</span></div>
+    <button id="undo-btn" class="nav-btn" style="background:rgba(255,255,255,0.1);opacity:0.35;pointer-events:none" onclick="undoLastAction()" title="Nothing to undo yet">↶ Undo</button>
+  </div>
   <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
     <nav class="nav" id="nav-main">
       <button class="nav-btn active" onclick="showScreen('run')">Run Coverage</button>
@@ -1663,6 +1666,70 @@ function defaultDateStr() {
   return `${y}-${m}-${d}`;
 }
 
+// ═══════════════════════════════════════════════════════
+//  UNDO
+//  A short, in-memory history of roster/log snapshots so a bad run,
+//  override, or roster edit can be reversed with one click. This is
+//  NOT persisted (a page refresh clears it) and is not a substitute
+//  for Backup/Restore — it's for catching an "oops" within a session.
+//  Start New Year and Restore each set their own baseline, so they
+//  clear this history rather than being undoable through it.
+// ═══════════════════════════════════════════════════════
+
+const UNDO_LIMIT = 15;
+let _undoStack = [];
+
+function pushUndoSnapshot(label) {
+  _undoStack.push({ label, roster: JSON.stringify(getRoster()), log: JSON.stringify(getLog()) });
+  if (_undoStack.length > UNDO_LIMIT) _undoStack.shift();
+  updateUndoButton();
+}
+
+function clearUndoHistory() {
+  _undoStack = [];
+  updateUndoButton();
+}
+
+function updateUndoButton() {
+  const btn = document.getElementById('undo-btn');
+  if (!btn) return;
+  const top = _undoStack[_undoStack.length - 1];
+  if (top) {
+    btn.style.opacity = '1';
+    btn.style.pointerEvents = 'auto';
+    btn.title = 'Undo: ' + top.label;
+  } else {
+    btn.style.opacity = '0.35';
+    btn.style.pointerEvents = 'none';
+    btn.title = 'Nothing to undo yet';
+  }
+}
+
+function undoLastAction() {
+  const snap = _undoStack.pop();
+  if (!snap) return;
+  setRoster(JSON.parse(snap.roster));
+  setLog(JSON.parse(snap.log));
+
+  // Refresh whatever screen is currently visible so it doesn't show stale data
+  const outputArea = document.getElementById('output-area');
+  if (outputArea) outputArea.style.display = 'none';
+  renderRoster();
+  renderLog();
+  if (document.getElementById('screen-summary')?.classList.contains('active')) {
+    renderSummary();
+    renderWeeklyGrid();
+  }
+  if (document.getElementById('screen-override')?.classList.contains('active') && _overrideDateStr) {
+    _overrideEntries = getLog().filter(e => e.date === _overrideDateStr);
+    renderOverrideTable();
+  }
+  refreshAbsenceDropdowns();
+
+  updateUndoButton();
+  showImportAlert('success', 'Undone: ' + snap.label);
+}
+
 window.addEventListener('beforeunload', () => {
   const dateStr = document.getElementById('run-date')?.value;
   if (dateStr) {
@@ -2080,6 +2147,8 @@ async function runCoverage() {
 
   const { assignments, newEntries, unassigned, conflicts, lockedCount } = assignCoverage(absences, dateStr, outsideSubCount);
 
+  pushUndoSnapshot('Run Coverage — ' + dateStr);
+
   // Update log (skip duplicates)
   const log = getLog();
   const existingKeys = new Set(log.filter(e => e.date === dateStr).map(e => `${e.absentTeacher}||${e.period}`));
@@ -2114,13 +2183,15 @@ async function updateRosterAfterRun(newEntries, dateStr) {
   const roster = getRoster();
   const log = getLog();
   // newEntries have already been pushed into log (and saved) by the time this
-  // runs, so they must be excluded here by reference — otherwise every entry
-  // looks "already credited" against itself and nothing is ever counted.
-  const newEntrySet = new Set(newEntries);
+  // runs. getLog() in local mode re-parses JSON from localStorage, so those
+  // entries come back as brand-new objects — matching by reference would
+  // never exclude them, which is exactly the bug this replaced. Match by
+  // (absentTeacher, period) key instead, same key scheme used elsewhere.
+  const newEntryKeys = new Set(newEntries.map(e => `${e.absentTeacher}||${e.period}`));
   // Find teachers already credited for this date (from previous runs)
   const alreadyCredited = new Set(
-    log.filter(e => e.date === dateStr && !newEntrySet.has(e) && e.coveringTeacher &&
-      !isSpecialLabel(e.coveringTeacher))
+    log.filter(e => e.date === dateStr && !newEntryKeys.has(`${e.absentTeacher}||${e.period}`) &&
+      e.coveringTeacher && !isSpecialLabel(e.coveringTeacher))
       .map(e => e.coveringTeacher.replace(' (Emergency)', '').trim())
   );
   const toUpdate = [];
@@ -2688,6 +2759,8 @@ async function saveTeacher() {
   const toStore = { ...teacher };
   DAYS.forEach(day => { toStore.avail[day] = [...teacher.avail[day]]; });
 
+  pushUndoSnapshot(editingTeacherId ? `Edit teacher — ${name}` : `Add teacher — ${name}`);
+
   if (editingTeacherId) {
     const idx = roster.findIndex(r => r.id === editingTeacherId);
     if (idx >= 0) roster[idx] = toStore;
@@ -2706,6 +2779,7 @@ async function deleteTeacher(id) {
   if (!confirm('Delete this teacher?')) return;
   const roster = getRoster();
   const teacher = roster.find(r => r.id === id);
+  pushUndoSnapshot(`Delete teacher — ${teacher?.name || id}`);
   if (teacher?._spId) await deleteTeacherSP(teacher._spId);
   setRoster(roster.filter(r => r.id !== id));
   renderRoster();
@@ -2715,6 +2789,7 @@ async function deleteTeacher(id) {
 
 function recalculateCoveragesFromLog() {
   if (!confirm('This will reset all coverage totals to match what is actually in the log. Continue?')) return;
+  pushUndoSnapshot('Recalculate totals from log');
   const log = getLog();
   const roster = getRoster();
 
@@ -2995,6 +3070,8 @@ async function confirmReset() {
 
   if (!confirm(`Remove ${toRemove.length} assignment(s) for ${dateStr} and roll back teacher records?`)) return;
 
+  pushUndoSnapshot('Reset Day — ' + dateStr);
+
   const roster = getRoster();
   const teachersToRollback = new Set(
     toRemove
@@ -3174,6 +3251,8 @@ async function applyOverride(idx, dateStr) {
   const newTeacher = document.getElementById(`override-new-${idx}`).value;
   if (!newTeacher) { alert('Please select a new teacher.'); return; }
 
+  pushUndoSnapshot(`Override — ${entry.absentTeacher} P${entry.period} (${dateStr})`);
+
   const oldTeacher = entry.coveringTeacher.replace(' (Emergency)', '').trim();
   const roster = getRoster();
   const log = getLog();
@@ -3216,6 +3295,7 @@ async function applyOverride(idx, dateStr) {
 // Reset: clears the covering teacher assignment but keeps the log entry (shows as UNASSIGNED)
 function resetOverride(idx, dateStr) {
   const entry = _overrideEntries[idx];
+  pushUndoSnapshot(`Reset assignment — ${entry.absentTeacher} P${entry.period} (${dateStr})`);
   const oldTeacher = entry.coveringTeacher.replace(' (Emergency)', '').trim();
   const roster = getRoster();
   const log = getLog();
@@ -3249,6 +3329,7 @@ function resetOverride(idx, dateStr) {
 function removeOverride(idx, dateStr) {
   if (!confirm('Remove this assignment entirely? The absence row will be cleared from the log.')) return;
   const entry = _overrideEntries[idx];
+  pushUndoSnapshot(`Remove assignment — ${entry.absentTeacher} P${entry.period} (${dateStr})`);
   const oldTeacher = entry.coveringTeacher.replace(' (Emergency)', '').trim();
   const roster = getRoster();
   let log = getLog();
@@ -3483,6 +3564,8 @@ function deriveAvailabilityFromSchedule() {
     + `\u2022 ${notInSchedule.length} not in the schedule, left alone`;
   if (!confirm(msg)) return;
 
+  pushUndoSnapshot('Sync with Schedule');
+
   let updated = 0, unchanged = 0;
   const noDuty = [];   // no coverage duty and not Tier E, so currently invisible
 
@@ -3541,6 +3624,7 @@ function removeCheckedUnscheduled() {
   if (!names.length) { showImportAlert('error', 'No one is checked. Check the people who have left, then remove.'); return; }
   if (!confirm(`Remove ${names.length} teacher(s) from the roster?\n\n${names.join('\n')}\n\nThe coverage log is not affected.`)) return;
 
+  pushUndoSnapshot(`Remove ${names.length} unscheduled teacher(s)`);
   setRoster(getRoster().filter(t => !names.includes(t.name)));
   renderRoster();
   refreshAbsenceDropdowns();
@@ -3624,7 +3708,8 @@ function clearRoster() {
   const roster = getRoster();
   if (!roster.length) { showImportAlert('error', 'The roster is already empty.'); return; }
   if (!confirm(`Remove all ${roster.length} teacher(s) from the roster?\n\nThe coverage log is not affected. Back up first if you have not already.`)) return;
-  if (!confirm('Confirm once more. This cannot be undone.')) return;
+  if (!confirm('Confirm once more. The header Undo button will reverse this until you reload the page, but a Backup is safer.')) return;
+  pushUndoSnapshot(`Clear roster (${roster.length} teachers)`);
   setRoster([]);
   renderRoster();
   refreshAbsenceDropdowns();
@@ -3963,8 +4048,9 @@ function startNewYear() {
   }
   stale.forEach(k => localStorage.removeItem(k));
 
-  // Senior classes ending is a spring setting
-  setData('cs_senior_ended', false);
+  // Senior classes ending is a spring setting. Stored the same way
+  // saveSeniorClassesFlag() writes it ('0'/'1'), not JSON-encoded.
+  localStorage.setItem('cs_senior_ended', '0');
   const seniorBox = document.getElementById('senior-classes-ended');
   if (seniorBox) seniorBox.checked = false;
 
@@ -3972,6 +4058,7 @@ function startNewYear() {
   renderRoster();
   renderSummary();
   refreshAbsenceDropdowns();
+  clearUndoHistory(); // last year's snapshots don't belong in the new year
 
   const cleared = [];
   if (unexcluded) cleared.push(`${unexcluded} exclusion${unexcluded !== 1 ? 's' : ''}`);
@@ -4255,6 +4342,7 @@ async function importAllData(event) {
       renderRoster();
       renderLog();
       renderAbsencesTable();
+      clearUndoHistory(); // pre-restore snapshots don't belong to the restored data
       alert('Restore complete!');
     } catch(err) {
       hideLoading();
