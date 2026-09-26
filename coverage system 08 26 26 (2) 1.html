@@ -700,7 +700,7 @@
         </div>
         <div>
           <label>End Date (for range)</label>
-          <input type="date" id="run-date-end" placeholder="Optional" />
+          <input type="date" id="run-date-end" placeholder="Optional" title="Someone out several days in a row: repeats these same absence rows across every school day through this date." />
         </div>
         <div>
           <label>Outside Subs Coming</label>
@@ -1889,6 +1889,66 @@ function getAbsences() {
   return absences;
 }
 
+// ── Multi-day range ("End Date (for range)") ─────────────────────────
+// For a teacher out several days in a row: the absence rows filled in for
+// the start date get repeated across every school day through the end
+// date, run through the fairness engine separately per day.
+
+// School days only (Mon-Fri) from start through end, inclusive.
+function weekdayRangeInclusive(startStr, endStr) {
+  const dates = [];
+  const cur = new Date(startStr + 'T00:00:00');
+  const end = new Date(endStr + 'T00:00:00');
+  while (cur <= end) {
+    const dow = cur.getDay();
+    if (dow !== 0 && dow !== 6) dates.push(toLocalDateStr(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return dates;
+}
+
+// Converts the engine's absence shape (absentTeacher/courseName/...) to the
+// per-date storage shape (teacher/course/...) used by cs_absences_<date>.
+function storageAbsencesFromEngine(list) {
+  return list.map(a => ({
+    teacher: a.absentTeacher,
+    period: a.period,
+    course: a.courseName,
+    section: a.sectionNumber,
+    room: a.roomNumber,
+    noCoverage: a.absType === 'skip',
+    absType: a.absType || 'normal',
+  }));
+}
+
+// Converts stored absences back to the engine shape, applying the same
+// filter getAbsences() applies to the DOM (real teacher, not skipped, has
+// a course or is an outside sub).
+function engineAbsencesFromStorage(list) {
+  return list
+    .filter(a => a.teacher && a.absType !== 'skip' && (a.course || a.absType === 'outside'))
+    .map(a => ({
+      absentTeacher: a.teacher,
+      period: a.period,
+      courseName: a.course || '',
+      sectionNumber: a.section || '',
+      roomNumber: a.room || '',
+      absType: a.absType || 'normal',
+    }));
+}
+
+// Adds today's absence rows onto date `d`'s own saved absences for a
+// range run, without overwriting anything `d` already has on its own —
+// e.g. an unrelated absence entered separately for that day.
+function mergeAbsencesIntoDate(d, engineAbsences) {
+  const existing = getAbsencesByDate(d);
+  const existingKeys = new Set(existing.map(a => `${a.teacher}||${a.period}`));
+  const toAdd = storageAbsencesFromEngine(engineAbsences).filter(a => !existingKeys.has(`${a.teacher}||${a.period}`));
+  const merged = existing.concat(toAdd);
+  setData('cs_absences_' + d, merged);
+  return engineAbsencesFromStorage(merged);
+}
+
 // ═══════════════════════════════════════════════════════
 //  ASSIGNMENT ENGINE
 // ═══════════════════════════════════════════════════════
@@ -2145,38 +2205,74 @@ async function runCoverage() {
   const absences = getAbsences();
   if (absences.length === 0) { alert('Please add at least one absence row.'); return; }
 
-  const { assignments, newEntries, unassigned, conflicts, lockedCount } = assignCoverage(absences, dateStr, outsideSubCount);
-
-  pushUndoSnapshot('Run Coverage — ' + dateStr);
-
-  // Update log (skip duplicates)
-  const log = getLog();
-  const existingKeys = new Set(log.filter(e => e.date === dateStr).map(e => `${e.absentTeacher}||${e.period}`));
-  const toAppend = [];
-  newEntries.forEach(entry => {
-    const key = `${entry.absentTeacher}||${entry.period}`;
-    if (!existingKeys.has(key)) {
-      const newEntry = { date: dateStr, ...entry };
-      log.push(newEntry);
-      toAppend.push(newEntry);
-      existingKeys.add(key);
+  // "End Date (for range)": someone out several days in a row. Repeat
+  // these same rows across every school day through that date, each run
+  // through the fairness engine separately since availability and
+  // who-else-is-out differ day to day.
+  const endDateStr = document.getElementById('run-date-end').value;
+  const MAX_RANGE_DAYS = 15;
+  let dateList = [dateStr];
+  if (endDateStr && endDateStr > dateStr) {
+    dateList = weekdayRangeInclusive(dateStr, endDateStr);
+    if (dateList.length > MAX_RANGE_DAYS) {
+      alert(`That range covers ${dateList.length} school days. Shorten it to ${MAX_RANGE_DAYS} or fewer and run again.`);
+      return;
     }
-  });
-  setLog(log);
-  if (STORAGE_MODE === 'sharepoint') await appendLogEntriesSP(toAppend);
-
-  // Update roster - only for genuinely new log entries
-  await updateRosterAfterRun(toAppend, dateStr);
-
-  // Save absences to SP
-  if (STORAGE_MODE === 'sharepoint') {
-    const absenceRows = getAbsencesByDate(dateStr);
-    await saveAbsencesForDateSP(dateStr, absenceRows);
   }
 
-  renderOutput(assignments, unassigned, conflicts, dateStr, lockedCount, outsideSubCount);
+  pushUndoSnapshot(dateList.length > 1
+    ? `Run Coverage — ${dateStr} to ${dateList[dateList.length - 1]}`
+    : 'Run Coverage — ' + dateStr);
+
+  let primaryResult = null;
+  for (let i = 0; i < dateList.length; i++) {
+    const d = dateList[i];
+    // Day 1 uses the rows exactly as entered. Later days merge the same
+    // rows into whatever that day already has on its own, so an absence
+    // already entered separately for a later day isn't lost.
+    const dayAbsences = i === 0 ? absences : mergeAbsencesIntoDate(d, absences);
+    if (i > 0) setData('cs_outsidesubcount_' + d, outsideSubCount);
+
+    const { assignments, newEntries, unassigned, conflicts, lockedCount } = assignCoverage(dayAbsences, d, outsideSubCount);
+
+    // Update log (skip duplicates)
+    const log = getLog();
+    const existingKeys = new Set(log.filter(e => e.date === d).map(e => `${e.absentTeacher}||${e.period}`));
+    const toAppend = [];
+    newEntries.forEach(entry => {
+      const key = `${entry.absentTeacher}||${entry.period}`;
+      if (!existingKeys.has(key)) {
+        const newEntry = { date: d, ...entry };
+        log.push(newEntry);
+        toAppend.push(newEntry);
+        existingKeys.add(key);
+      }
+    });
+    setLog(log);
+    if (STORAGE_MODE === 'sharepoint') await appendLogEntriesSP(toAppend);
+
+    // Update roster - only for genuinely new log entries. Awaited and run
+    // one day at a time so each day's weekly-fairness lookup sees the
+    // previous days' assignments in this same range.
+    await updateRosterAfterRun(toAppend, d);
+
+    if (STORAGE_MODE === 'sharepoint') {
+      const absenceRows = getAbsencesByDate(d);
+      await saveAbsencesForDateSP(d, absenceRows);
+    }
+
+    if (i === 0) primaryResult = { assignments, unassigned, conflicts, lockedCount };
+  }
+
+  renderOutput(primaryResult.assignments, primaryResult.unassigned, primaryResult.conflicts, dateStr, primaryResult.lockedCount, outsideSubCount);
   document.getElementById('output-area').style.display = 'block';
   document.getElementById('output-area').scrollIntoView({ behavior: 'smooth' });
+
+  if (dateList.length > 1) {
+    showImportAlert('success', `Coverage run for ${dateList.length} school days (${dateStr} → ${dateList[dateList.length - 1]}). Switch the date above to each of the other days and click Run Coverage again to view, print, or email that day's plan — it's already locked in and won't be reassigned.`);
+  }
+  // Clear so a stale end date doesn't silently turn tomorrow's single-day run into a range
+  document.getElementById('run-date-end').value = '';
 }
 
 async function updateRosterAfterRun(newEntries, dateStr) {
