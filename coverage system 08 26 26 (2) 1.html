@@ -643,7 +643,10 @@
 <body>
 
 <div class="header">
-  <div class="header-title">Coverage <span>System</span></div>
+  <div style="display:flex;align-items:center;gap:14px">
+    <div class="header-title">Coverage <span>System</span></div>
+    <button id="undo-btn" class="nav-btn" style="background:rgba(255,255,255,0.1);opacity:0.35;pointer-events:none" onclick="undoLastAction()" title="Nothing to undo yet">↶ Undo</button>
+  </div>
   <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
     <nav class="nav" id="nav-main">
       <button class="nav-btn active" onclick="showScreen('run')">Run Coverage</button>
@@ -981,7 +984,13 @@
         <div>
           <label style="font-size:11px">Period</label>
           <select id="si-add-period" style="width:100%">
-            ${[1,2,3,4,5,6,7].map(p => `<option value="${p}">${p}</option>`).join('')}
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
           </select>
         </div>
         <div>
@@ -1627,11 +1636,17 @@ function showScreen(name) {
 }
 
 function todayStr() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  return toLocalDateStr(new Date());
+}
+
+// Formats a Date using its LOCAL calendar date, not toISOString() (which
+// converts to UTC first and can land on the wrong day in timezones ahead of
+// UTC — e.g. British Summer Time — for a date built from local midnight).
+function toLocalDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function defaultDateStr() {
@@ -1649,6 +1664,70 @@ function defaultDateStr() {
   const m = String(base.getMonth() + 1).padStart(2, '0');
   const d = String(base.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+}
+
+// ═══════════════════════════════════════════════════════
+//  UNDO
+//  A short, in-memory history of roster/log snapshots so a bad run,
+//  override, or roster edit can be reversed with one click. This is
+//  NOT persisted (a page refresh clears it) and is not a substitute
+//  for Backup/Restore — it's for catching an "oops" within a session.
+//  Start New Year and Restore each set their own baseline, so they
+//  clear this history rather than being undoable through it.
+// ═══════════════════════════════════════════════════════
+
+const UNDO_LIMIT = 15;
+let _undoStack = [];
+
+function pushUndoSnapshot(label) {
+  _undoStack.push({ label, roster: JSON.stringify(getRoster()), log: JSON.stringify(getLog()) });
+  if (_undoStack.length > UNDO_LIMIT) _undoStack.shift();
+  updateUndoButton();
+}
+
+function clearUndoHistory() {
+  _undoStack = [];
+  updateUndoButton();
+}
+
+function updateUndoButton() {
+  const btn = document.getElementById('undo-btn');
+  if (!btn) return;
+  const top = _undoStack[_undoStack.length - 1];
+  if (top) {
+    btn.style.opacity = '1';
+    btn.style.pointerEvents = 'auto';
+    btn.title = 'Undo: ' + top.label;
+  } else {
+    btn.style.opacity = '0.35';
+    btn.style.pointerEvents = 'none';
+    btn.title = 'Nothing to undo yet';
+  }
+}
+
+function undoLastAction() {
+  const snap = _undoStack.pop();
+  if (!snap) return;
+  setRoster(JSON.parse(snap.roster));
+  setLog(JSON.parse(snap.log));
+
+  // Refresh whatever screen is currently visible so it doesn't show stale data
+  const outputArea = document.getElementById('output-area');
+  if (outputArea) outputArea.style.display = 'none';
+  renderRoster();
+  renderLog();
+  if (document.getElementById('screen-summary')?.classList.contains('active')) {
+    renderSummary();
+    renderWeeklyGrid();
+  }
+  if (document.getElementById('screen-override')?.classList.contains('active') && _overrideDateStr) {
+    _overrideEntries = getLog().filter(e => e.date === _overrideDateStr);
+    renderOverrideTable();
+  }
+  refreshAbsenceDropdowns();
+
+  updateUndoButton();
+  showImportAlert('success', 'Undone: ' + snap.label);
 }
 
 window.addEventListener('beforeunload', () => {
@@ -1819,7 +1898,7 @@ function getWeekBounds(dateStr) {
   const day = d.getDay(); // 0=Sun
   const mon = new Date(d); mon.setDate(d.getDate() - ((day + 6) % 7));
   const fri = new Date(mon); fri.setDate(mon.getDate() + 4);
-  return { start: mon.toISOString().slice(0,10), end: fri.toISOString().slice(0,10) };
+  return { start: toLocalDateStr(mon), end: toLocalDateStr(fri) };
 }
 
 function getWeeklyCounts(dateStr) {
@@ -2068,6 +2147,8 @@ async function runCoverage() {
 
   const { assignments, newEntries, unassigned, conflicts, lockedCount } = assignCoverage(absences, dateStr, outsideSubCount);
 
+  pushUndoSnapshot('Run Coverage — ' + dateStr);
+
   // Update log (skip duplicates)
   const log = getLog();
   const existingKeys = new Set(log.filter(e => e.date === dateStr).map(e => `${e.absentTeacher}||${e.period}`));
@@ -2101,17 +2182,28 @@ async function runCoverage() {
 async function updateRosterAfterRun(newEntries, dateStr) {
   const roster = getRoster();
   const log = getLog();
+  // newEntries have already been pushed into log (and saved) by the time this
+  // runs. getLog() in local mode re-parses JSON from localStorage, so those
+  // entries come back as brand-new objects — matching by reference would
+  // never exclude them, which is exactly the bug this replaced. Match by
+  // (absentTeacher, period) key instead, same key scheme used elsewhere.
+  const newEntryKeys = new Set(newEntries.map(e => `${e.absentTeacher}||${e.period}`));
   // Find teachers already credited for this date (from previous runs)
   const alreadyCredited = new Set(
-    log.filter(e => e.date === dateStr && e.coveringTeacher &&
-      !isSpecialLabel(e.coveringTeacher))
+    log.filter(e => e.date === dateStr && !newEntryKeys.has(`${e.absentTeacher}||${e.period}`) &&
+      e.coveringTeacher && !isSpecialLabel(e.coveringTeacher))
       .map(e => e.coveringTeacher.replace(' (Emergency)', '').trim())
   );
   const toUpdate = [];
+  // A "coverage" is credited once per teacher per date, not once per period —
+  // track who this run already credited so a teacher covering two periods
+  // today doesn't get counted twice.
+  const creditedThisRun = new Set();
   newEntries.forEach(entry => {
     const ct = entry.coveringTeacher.replace(' (Emergency)', '').trim();
     if (isSpecialLabel(ct)) return;
-    if (alreadyCredited.has(ct)) return; // already counted for this date
+    if (alreadyCredited.has(ct) || creditedThisRun.has(ct)) return; // already counted for this date
+    creditedThisRun.add(ct);
     const teacher = roster.find(t => t.name === ct);
     if (teacher) {
       teacher.previousCoverageDate = teacher.lastCoverageDate;
@@ -2334,7 +2426,7 @@ function getWeekDatesFromDate(dateStr) {
   for (let i = 0; i < 5; i++) {
     const day = new Date(monday);
     day.setDate(monday.getDate() + i);
-    dates.push({ dateStr: day.toISOString().slice(0,10), dayName: dayNames[i] });
+    dates.push({ dateStr: toLocalDateStr(day), dayName: dayNames[i] });
   }
   return dates;
 }
@@ -2667,6 +2759,8 @@ async function saveTeacher() {
   const toStore = { ...teacher };
   DAYS.forEach(day => { toStore.avail[day] = [...teacher.avail[day]]; });
 
+  pushUndoSnapshot(editingTeacherId ? `Edit teacher — ${name}` : `Add teacher — ${name}`);
+
   if (editingTeacherId) {
     const idx = roster.findIndex(r => r.id === editingTeacherId);
     if (idx >= 0) roster[idx] = toStore;
@@ -2685,6 +2779,7 @@ async function deleteTeacher(id) {
   if (!confirm('Delete this teacher?')) return;
   const roster = getRoster();
   const teacher = roster.find(r => r.id === id);
+  pushUndoSnapshot(`Delete teacher — ${teacher?.name || id}`);
   if (teacher?._spId) await deleteTeacherSP(teacher._spId);
   setRoster(roster.filter(r => r.id !== id));
   renderRoster();
@@ -2694,6 +2789,7 @@ async function deleteTeacher(id) {
 
 function recalculateCoveragesFromLog() {
   if (!confirm('This will reset all coverage totals to match what is actually in the log. Continue?')) return;
+  pushUndoSnapshot('Recalculate totals from log');
   const log = getLog();
   const roster = getRoster();
 
@@ -2974,6 +3070,8 @@ async function confirmReset() {
 
   if (!confirm(`Remove ${toRemove.length} assignment(s) for ${dateStr} and roll back teacher records?`)) return;
 
+  pushUndoSnapshot('Reset Day — ' + dateStr);
+
   const roster = getRoster();
   const teachersToRollback = new Set(
     toRemove
@@ -3153,6 +3251,8 @@ async function applyOverride(idx, dateStr) {
   const newTeacher = document.getElementById(`override-new-${idx}`).value;
   if (!newTeacher) { alert('Please select a new teacher.'); return; }
 
+  pushUndoSnapshot(`Override — ${entry.absentTeacher} P${entry.period} (${dateStr})`);
+
   const oldTeacher = entry.coveringTeacher.replace(' (Emergency)', '').trim();
   const roster = getRoster();
   const log = getLog();
@@ -3166,9 +3266,16 @@ async function applyOverride(idx, dateStr) {
 
   const oldT = roster.find(t => t.name === oldTeacher);
   if (oldT && !isSpecialLabel(oldTeacher)) {
-    oldT.totalCoverages = Math.max(0, (oldT.totalCoverages || 0) - 1);
-    const prior = log.filter(e => e.coveringTeacher?.replace(' (Emergency)', '').trim() === oldTeacher && e.date !== dateStr).map(e => e.date).sort();
-    oldT.lastCoverageDate = prior.length > 0 ? prior[prior.length - 1] : (oldT.previousCoverageDate || '');
+    // "Coverage" is counted per date, not per period — only roll back the
+    // total if this was the teacher's only assignment left on this date.
+    const stillCoveringToday = log.some(e => e.date === dateStr &&
+      !isSpecialLabel(e.coveringTeacher) &&
+      e.coveringTeacher.replace(' (Emergency)', '').trim() === oldTeacher);
+    if (!stillCoveringToday) {
+      oldT.totalCoverages = Math.max(0, (oldT.totalCoverages || 0) - 1);
+      const prior = log.filter(e => e.coveringTeacher?.replace(' (Emergency)', '').trim() === oldTeacher && e.date !== dateStr).map(e => e.date).sort();
+      oldT.lastCoverageDate = prior.length > 0 ? prior[prior.length - 1] : (oldT.previousCoverageDate || '');
+    }
     if (STORAGE_MODE === 'sharepoint') await saveTeacherSP(oldT);
   }
 
@@ -3188,6 +3295,7 @@ async function applyOverride(idx, dateStr) {
 // Reset: clears the covering teacher assignment but keeps the log entry (shows as UNASSIGNED)
 function resetOverride(idx, dateStr) {
   const entry = _overrideEntries[idx];
+  pushUndoSnapshot(`Reset assignment — ${entry.absentTeacher} P${entry.period} (${dateStr})`);
   const oldTeacher = entry.coveringTeacher.replace(' (Emergency)', '').trim();
   const roster = getRoster();
   const log = getLog();
@@ -3200,9 +3308,16 @@ function resetOverride(idx, dateStr) {
   // Roll back old teacher stats
   const oldT = roster.find(t => t.name === oldTeacher);
   if (oldT && !isSpecialLabel(oldTeacher)) {
-    oldT.totalCoverages = Math.max(0, (oldT.totalCoverages || 0) - 1);
-    const prior = log.filter(e => e.coveringTeacher?.replace(' (Emergency)', '').trim() === oldTeacher && e.date !== dateStr).map(e => e.date).sort();
-    oldT.lastCoverageDate = prior.length > 0 ? prior[prior.length - 1] : (oldT.previousCoverageDate || '');
+    // "Coverage" is counted per date, not per period — only roll back the
+    // total if this was the teacher's only assignment left on this date.
+    const stillCoveringToday = log.some(e => e.date === dateStr &&
+      !isSpecialLabel(e.coveringTeacher) &&
+      e.coveringTeacher.replace(' (Emergency)', '').trim() === oldTeacher);
+    if (!stillCoveringToday) {
+      oldT.totalCoverages = Math.max(0, (oldT.totalCoverages || 0) - 1);
+      const prior = log.filter(e => e.coveringTeacher?.replace(' (Emergency)', '').trim() === oldTeacher && e.date !== dateStr).map(e => e.date).sort();
+      oldT.lastCoverageDate = prior.length > 0 ? prior[prior.length - 1] : (oldT.previousCoverageDate || '');
+    }
   }
 
   setRoster(roster);
@@ -3214,6 +3329,7 @@ function resetOverride(idx, dateStr) {
 function removeOverride(idx, dateStr) {
   if (!confirm('Remove this assignment entirely? The absence row will be cleared from the log.')) return;
   const entry = _overrideEntries[idx];
+  pushUndoSnapshot(`Remove assignment — ${entry.absentTeacher} P${entry.period} (${dateStr})`);
   const oldTeacher = entry.coveringTeacher.replace(' (Emergency)', '').trim();
   const roster = getRoster();
   let log = getLog();
@@ -3225,9 +3341,17 @@ function removeOverride(idx, dateStr) {
   // Roll back old teacher stats
   const oldT = roster.find(t => t.name === oldTeacher);
   if (oldT && !isSpecialLabel(oldTeacher)) {
-    oldT.totalCoverages = Math.max(0, (oldT.totalCoverages || 0) - 1);
-    const prior = log.filter(e => e.coveringTeacher?.replace(' (Emergency)', '').trim() === oldTeacher).map(e => e.date).sort();
-    oldT.lastCoverageDate = prior.length > 0 ? prior[prior.length - 1] : (oldT.previousCoverageDate || '');
+    // "Coverage" is counted per date, not per period — only roll back the
+    // total if this was the teacher's only assignment left on this date.
+    // (The removed entry is already filtered out of `log` above.)
+    const stillCoveringToday = log.some(e => e.date === dateStr &&
+      !isSpecialLabel(e.coveringTeacher) &&
+      e.coveringTeacher.replace(' (Emergency)', '').trim() === oldTeacher);
+    if (!stillCoveringToday) {
+      oldT.totalCoverages = Math.max(0, (oldT.totalCoverages || 0) - 1);
+      const prior = log.filter(e => e.coveringTeacher?.replace(' (Emergency)', '').trim() === oldTeacher).map(e => e.date).sort();
+      oldT.lastCoverageDate = prior.length > 0 ? prior[prior.length - 1] : (oldT.previousCoverageDate || '');
+    }
   }
 
   setRoster(roster);
@@ -3343,9 +3467,13 @@ function parseCSVLine(line) {
   let current = '';
   let inQuotes = false;
   for (let i = 0; i < line.length; i++) {
-    if (line[i] === '"') { inQuotes = !inQuotes; }
-    else if (line[i] === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
-    else { current += line[i]; }
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') { current += '"'; i++; } // escaped "" inside a quoted field
+      else { inQuotes = !inQuotes; }
+    }
+    else if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
+    else { current += ch; }
   }
   result.push(current.trim());
   return result;
@@ -3436,6 +3564,8 @@ function deriveAvailabilityFromSchedule() {
     + `\u2022 ${notInSchedule.length} not in the schedule, left alone`;
   if (!confirm(msg)) return;
 
+  pushUndoSnapshot('Sync with Schedule');
+
   let updated = 0, unchanged = 0;
   const noDuty = [];   // no coverage duty and not Tier E, so currently invisible
 
@@ -3494,6 +3624,7 @@ function removeCheckedUnscheduled() {
   if (!names.length) { showImportAlert('error', 'No one is checked. Check the people who have left, then remove.'); return; }
   if (!confirm(`Remove ${names.length} teacher(s) from the roster?\n\n${names.join('\n')}\n\nThe coverage log is not affected.`)) return;
 
+  pushUndoSnapshot(`Remove ${names.length} unscheduled teacher(s)`);
   setRoster(getRoster().filter(t => !names.includes(t.name)));
   renderRoster();
   refreshAbsenceDropdowns();
@@ -3577,7 +3708,8 @@ function clearRoster() {
   const roster = getRoster();
   if (!roster.length) { showImportAlert('error', 'The roster is already empty.'); return; }
   if (!confirm(`Remove all ${roster.length} teacher(s) from the roster?\n\nThe coverage log is not affected. Back up first if you have not already.`)) return;
-  if (!confirm('Confirm once more. This cannot be undone.')) return;
+  if (!confirm('Confirm once more. The header Undo button will reverse this until you reload the page, but a Backup is safer.')) return;
+  pushUndoSnapshot(`Clear roster (${roster.length} teachers)`);
   setRoster([]);
   renderRoster();
   refreshAbsenceDropdowns();
@@ -3916,8 +4048,9 @@ function startNewYear() {
   }
   stale.forEach(k => localStorage.removeItem(k));
 
-  // Senior classes ending is a spring setting
-  setData('cs_senior_ended', false);
+  // Senior classes ending is a spring setting. Stored the same way
+  // saveSeniorClassesFlag() writes it ('0'/'1'), not JSON-encoded.
+  localStorage.setItem('cs_senior_ended', '0');
   const seniorBox = document.getElementById('senior-classes-ended');
   if (seniorBox) seniorBox.checked = false;
 
@@ -3925,6 +4058,7 @@ function startNewYear() {
   renderRoster();
   renderSummary();
   refreshAbsenceDropdowns();
+  clearUndoHistory(); // last year's snapshots don't belong in the new year
 
   const cleared = [];
   if (unexcluded) cleared.push(`${unexcluded} exclusion${unexcluded !== 1 ? 's' : ''}`);
@@ -4153,6 +4287,8 @@ async function importAllData(event) {
         setData('cs_roster', payload.roster);
         setData('cs_log', payload.log);
         if (payload.schedule) setData('cs_schedule', payload.schedule);
+        if (payload.roomChart) setData('cs_roomchart', payload.roomChart);
+        if (payload.seniorClassesEnded !== undefined) localStorage.setItem('cs_senior_ended', payload.seniorClassesEnded);
         if (payload.emailTemplate) localStorage.setItem('cs_email_template', payload.emailTemplate);
         // Restore per-date absences
         Object.entries(payload.absences || {}).forEach(([date, abs]) => {
@@ -4206,6 +4342,7 @@ async function importAllData(event) {
       renderRoster();
       renderLog();
       renderAbsencesTable();
+      clearUndoHistory(); // pre-restore snapshots don't belong to the restored data
       alert('Restore complete!');
     } catch(err) {
       hideLoading();
@@ -4255,6 +4392,8 @@ function exportAllData(label) {
     roster: getRoster(),
     log: getLog(),
     schedule: getData('cs_schedule', {}),
+    roomChart: getData('cs_roomchart', {}),
+    seniorClassesEnded: localStorage.getItem('cs_senior_ended') || '0',
     emailTemplate: localStorage.getItem('cs_email_template') || '',
     absences,
     notes,
@@ -4348,7 +4487,7 @@ function renderWeeklyGrid() {
   for (let i = 0; i < 5; i++) {
     const d = new Date(start + 'T00:00:00');
     d.setDate(d.getDate() + i);
-    weekDates.push({ dateStr: d.toISOString().slice(0,10), dayName: dayNames[i], short: d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }) });
+    weekDates.push({ dateStr: toLocalDateStr(d), dayName: dayNames[i], short: d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }) });
   }
 
   const log = getLog();
