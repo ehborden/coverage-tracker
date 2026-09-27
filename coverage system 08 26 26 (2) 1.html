@@ -1882,7 +1882,10 @@ function getAbsences() {
     const section = row.querySelector('.abs-section').value.trim();
     const room = row.querySelector('.abs-room').value.trim();
     const absType2 = row.querySelector('.abs-type')?.value || 'normal';
-    if (teacher && absType2 !== 'skip' && (course || absType2 === 'outside')) {
+    // 'skip' rows still need to reach assignCoverage — they register the
+    // teacher as absent (so they can't be picked to cover someone else)
+    // even though the period itself needs no substitute.
+    if (teacher && (absType2 === 'skip' || absType2 === 'outside' || course)) {
       absences.push({ absentTeacher: teacher, period, courseName: course, sectionNumber: section, roomNumber: room, absType: absType2 });
     }
   });
@@ -1926,7 +1929,8 @@ function storageAbsencesFromEngine(list) {
 // a course or is an outside sub).
 function engineAbsencesFromStorage(list) {
   return list
-    .filter(a => a.teacher && a.absType !== 'skip' && (a.course || a.absType === 'outside'))
+    // 'skip' rows still need to reach assignCoverage — see getAbsences().
+    .filter(a => a.teacher && (a.absType === 'skip' || a.absType === 'outside' || a.course))
     .map(a => ({
       absentTeacher: a.teacher,
       period: a.period,
@@ -1971,16 +1975,19 @@ function scheduledClassFor(teacherName, dayName, period) {
 // from that day's real schedule instead of blindly repeating day one's
 // values, since the same teacher can teach a different class in the same
 // period on a different day. A day the schedule confirms is genuinely free
-// is dropped entirely — no class means no coverage needed there. Only
-// falls back to copying day one's values (flagged) when the schedule has
-// no data for that teacher at all, so a free period can't be told apart
-// from a class that's simply missing from what's loaded.
+// is turned into a 'skip' row rather than dropped outright — no class
+// means no coverage is needed there, but the teacher is still absent that
+// day and must stay excluded from covering anyone else (assignCoverage
+// treats 'skip' as "absent, nothing to assign"). Only falls back to
+// copying day one's values (flagged) when the schedule has no data for
+// that teacher at all, so a free period can't be told apart from a class
+// that's simply missing from what's loaded.
 function rowsForRangeDay(baseAbsences, dayName) {
   const unmatched = [];
   const rows = [];
   baseAbsences.forEach(a => {
     const real = scheduledClassFor(a.absentTeacher, dayName, a.period);
-    if (real === 'free') return; // confirmed free period — nothing to cover
+    if (real === 'free') { rows.push({ ...a, absType: 'skip' }); return; }
     if (real) { rows.push({ ...a, courseName: real.courseName, sectionNumber: real.section, roomNumber: real.room }); return; }
     unmatched.push({ absentTeacher: a.absentTeacher, period: a.period });
     rows.push({ ...a });
@@ -2052,7 +2059,16 @@ function assignCoverage(absences, dateStr, outsideSubCount) {
   const dayName = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
   const weeklyCounts = getWeeklyCounts(dateStr);
   const weekAssigned = getWeekAssigned(dateStr);
+  // Every entry here registers its teacher as absent today, including a
+  // 'skip' row (a period needing no substitute, e.g. a confirmed free
+  // period on a multi-day range) — it must still count toward
+  // absentTeachers, or that person could be picked to cover someone else
+  // on a day they're actually out.
   const absentTeachers = new Set(absences.filter(a => a.absType !== 'tardy').map(a => a.absentTeacher));
+  // Periods that actually need a substitute. 'skip' rows are excluded
+  // from here and from everything below — they exist only to mark
+  // someone absent, not to be assigned.
+  const coverableAbsences = absences.filter(a => a.absType !== 'skip');
 
   // Load existing assignments for this date (locking)
   const existing = getExistingAssignments(dateStr);
@@ -2092,7 +2108,7 @@ function assignCoverage(absences, dateStr, outsideSubCount) {
   const outsideSubPeriodMap = {};
   if (outsideSubCount > 0) {
     const periodCounts = {};
-    absences.forEach(ab => {
+    coverableAbsences.forEach(ab => {
       if (lockedKeys.has(`${ab.absentTeacher}||${ab.period}`)) return;
       const p = ab.period;
       const cnt = roster.filter(t =>
@@ -2100,8 +2116,8 @@ function assignCoverage(absences, dateStr, outsideSubCount) {
       ).length;
       periodCounts[p] = (periodCounts[p] || 0) + cnt;
     });
-    const sortedPeriods = [...new Set(absences.map(a => a.period))].sort((a,b) => (periodCounts[a]||0) - (periodCounts[b]||0));
-    const unlockedAbsences = absences.filter(ab => !lockedKeys.has(`${ab.absentTeacher}||${ab.period}`));
+    const sortedPeriods = [...new Set(coverableAbsences.map(a => a.period))].sort((a,b) => (periodCounts[a]||0) - (periodCounts[b]||0));
+    const unlockedAbsences = coverableAbsences.filter(ab => !lockedKeys.has(`${ab.absentTeacher}||${ab.period}`));
     unlockedAbsences.filter(ab => ab.absType === 'outside').forEach(ab => {
       outsideSubPeriodMap[`${ab.absentTeacher}||${ab.period}`] = outsideSubCount > 1 ? 'Outside Sub 1' : 'Outside Sub';
     });
@@ -2121,7 +2137,7 @@ function assignCoverage(absences, dateStr, outsideSubCount) {
     for (let i = 0; i < outsideSubCount; i++) subUsage[i] = new Set();
     // Pre-populate from existing outside sub assignments that will survive this re-run
     // (i.e. their absence row is still present AND they won't be re-evaluated)
-    const currentAbsenceKeys = new Set(absences.map(ab => `${ab.absentTeacher}||${ab.period}`));
+    const currentAbsenceKeys = new Set(coverableAbsences.map(ab => `${ab.absentTeacher}||${ab.period}`));
     existing.forEach(e => {
       if (!isOutsideSub(e.coveringTeacher)) return;
       // Only block this period if this entry is NOT being re-evaluated in this run
@@ -2147,7 +2163,7 @@ function assignCoverage(absences, dateStr, outsideSubCount) {
   }
 
   // Assign new absences
-  absences.forEach(ab => {
+  coverableAbsences.forEach(ab => {
     const key = `${ab.absentTeacher}||${ab.period}`;
     if (lockedKeys.has(key)) return; // already locked
 
@@ -3570,6 +3586,13 @@ function loadScheduleCSV(event) {
 
       scheduleData = {};
       let parsed = 0;
+      // Rows whose meeting-times string didn't match the expected format
+      // (e.g. "M-3", "T-5, W-5"). A row like this must NOT silently create
+      // an empty scheduleData[teacher] entry — scheduledClassFor() treats
+      // "present but empty" as a confirmed free period, so a teacher whose
+      // whole schedule fails to parse would otherwise look free every
+      // period instead of simply missing from what's loaded.
+      const unparsedRows = [];
 
       for (let i = 1; i < lines.length; i++) {
         if (!lines[i].trim()) continue;
@@ -3587,6 +3610,10 @@ function loadScheduleCSV(event) {
 
         // Parse meeting times like "M-3", "T-5, W-5", "MWR-1, F-7"
         const slots = parseMeetingTimes(meetingTimes);
+        if (slots.length === 0) {
+          unparsedRows.push(`${teacher} (${section || courseName || 'unnamed class'}): "${meetingTimes}"`);
+          continue;
+        }
         if (!scheduleData[teacher]) scheduleData[teacher] = [];
         slots.forEach(({ day, period }) => {
           // Look up specific room from room chart first
@@ -3599,7 +3626,14 @@ function loadScheduleCSV(event) {
 
       const teacherCount = Object.keys(scheduleData).length;
       document.getElementById('schedule-status').textContent = `✓ ${teacherCount} teachers loaded`;
-      showImportAlert('success', `Schedule loaded: ${teacherCount} teachers, ${parsed} class sections.`);
+      let statusMsg = `Schedule loaded: ${teacherCount} teachers, ${parsed} class sections.`;
+      if (unparsedRows.length > 0) statusMsg += ` ${unparsedRows.length} row(s) had a meeting time that couldn't be read and were skipped.`;
+      showImportAlert(unparsedRows.length > 0 ? 'error' : 'success', statusMsg);
+      if (unparsedRows.length > 0) {
+        alert(`These rows had a meeting time that couldn't be read, so they're missing from the schedule (and from anything, like the multi-day range, that depends on it):\n\n`
+          + unparsedRows.slice(0, 30).join('\n')
+          + (unparsedRows.length > 30 ? `\n...and ${unparsedRows.length - 30} more.` : ''));
+      }
       // Save to localStorage and refresh dropdowns
       saveScheduleToStorage();
       refreshAbsenceDropdowns();
