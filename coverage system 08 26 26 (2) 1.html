@@ -1950,30 +1950,40 @@ function mergeAbsencesIntoDate(d, engineAbsences) {
 }
 
 // A teacher's real scheduled class for one day+period, from the loaded
-// Schedule CSV. Same lookup Out All Week uses. Null if nothing is
-// scheduled there (a free period, or the teacher/row isn't in the
-// loaded schedule at all).
+// Schedule CSV. Same lookup Out All Week uses. Three outcomes, which
+// rowsForRangeDay treats differently:
+//   { courseName, section, room }  the real class found
+//   'free'                          teacher IS in the loaded schedule, but
+//                                    genuinely has nothing that period — a
+//                                    real free period, no coverage needed
+//   null                            teacher isn't in the loaded schedule at
+//                                    all, so there's no way to tell a free
+//                                    period from a class we don't have on file
 function scheduledClassFor(teacherName, dayName, period) {
   const classes = scheduleData[teacherName];
   if (!classes) return null;
   const match = classes.find(c => c.day === dayName && c.period === period);
-  if (!match) return null;
+  if (!match) return 'free';
   return { courseName: match.courseName || '', section: match.section || '', room: match.room || '' };
 }
 
 // For a later day in a range run: re-derives each row's course/section/room
 // from that day's real schedule instead of blindly repeating day one's
 // values, since the same teacher can teach a different class in the same
-// period on a different day. Falls back to day one's values (flagged as
-// `_notScheduled`) only when the loaded schedule has no matching class —
-// e.g. no schedule loaded, or a manually-typed row that isn't in it.
+// period on a different day. A day the schedule confirms is genuinely free
+// is dropped entirely — no class means no coverage needed there. Only
+// falls back to copying day one's values (flagged) when the schedule has
+// no data for that teacher at all, so a free period can't be told apart
+// from a class that's simply missing from what's loaded.
 function rowsForRangeDay(baseAbsences, dayName) {
   const unmatched = [];
-  const rows = baseAbsences.map(a => {
+  const rows = [];
+  baseAbsences.forEach(a => {
     const real = scheduledClassFor(a.absentTeacher, dayName, a.period);
-    if (real) return { ...a, courseName: real.courseName, sectionNumber: real.section, roomNumber: real.room };
+    if (real === 'free') return; // confirmed free period — nothing to cover
+    if (real) { rows.push({ ...a, courseName: real.courseName, sectionNumber: real.section, roomNumber: real.room }); return; }
     unmatched.push({ absentTeacher: a.absentTeacher, period: a.period });
-    return { ...a };
+    rows.push({ ...a });
   });
   return { rows, unmatched };
 }
@@ -2312,7 +2322,7 @@ async function runCoverage() {
     const lines = unmatchedByDate.map(u =>
       `${u.date}: ` + u.rows.map(r => `${r.absentTeacher} P${r.period}`).join(', ')
     );
-    alert(`No scheduled class was found for these, so the course/room from ${dateStr} was copied instead. Double-check them:\n\n` + lines.join('\n'));
+    alert(`These aren't in the loaded schedule at all, so there's no way to tell whether they need coverage on the later day. The course/room from ${dateStr} was copied instead — double-check them:\n\n` + lines.join('\n'));
   }
   if (dateList.length > 1) {
     showImportAlert('success', `Coverage run for ${dateList.length} school days (${dateStr} → ${dateList[dateList.length - 1]}). Switch the date above to each of the other days and click Run Coverage again to view, print, or email that day's plan — it's already locked in and won't be reassigned.`);
