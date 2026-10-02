@@ -824,7 +824,7 @@
         </div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-ghost" onclick="deriveAvailabilityFromSchedule()" title="Sync roster availability with assigned Coverage periods, add new teachers, flag departed ones">Sync with Schedule</button>
-          <button class="btn btn-ghost" onclick="recalculateCoveragesFromLog()" title="Reset all coverage totals to match what is actually in the log">Recalculate from Log</button>
+          <button class="btn btn-ghost" onclick="recalculateCoveragesFromLog()" title="Reset coverage totals, last-covered, and previous-covered dates to match what is actually in the log">Recalculate from Log</button>
           <button class="btn btn-ghost" onclick="openGrade12TempModal()" title="Mark grade 12 class periods as temporary coverage availability">Grade 12 Temp Periods</button>
           <button class="btn btn-primary" onclick="openTeacherModal()">+ Add Teacher</button>
         </div>
@@ -2956,12 +2956,12 @@ async function deleteTeacher(id) {
 }
 
 function recalculateCoveragesFromLog() {
-  if (!confirm('This will reset all coverage totals to match what is actually in the log. Continue?')) return;
+  if (!confirm('This will reset all coverage totals, last-covered dates, and previous-covered dates to match what is actually in the log. Continue?')) return;
   pushUndoSnapshot('Recalculate totals from log');
   const log = getLog();
   const roster = getRoster();
 
-  // Count unique dates per covering teacher from the log
+  // Collect every date per covering teacher from the log
   const dateSets = {};
   log.forEach(e => {
     if (!e.coveringTeacher || isSpecialLabel(e.coveringTeacher)) return;
@@ -2971,12 +2971,21 @@ function recalculateCoveragesFromLog() {
   });
 
   roster.forEach(t => {
-    t.totalCoverages = dateSets[t.name] ? dateSets[t.name].size : 0;
+    const dates = dateSets[t.name];
+    t.totalCoverages = dates ? dates.size : 0;
+    if (dates && dates.size > 0) {
+      const sorted = [...dates].sort(); // yyyy-mm-dd strings sort chronologically
+      t.lastCoverageDate = sorted[sorted.length - 1];
+      t.previousCoverageDate = sorted.length > 1 ? sorted[sorted.length - 2] : '';
+    } else {
+      t.lastCoverageDate = '';
+      t.previousCoverageDate = '';
+    }
   });
 
   setRoster(roster);
   renderRoster();
-  alert('Coverage totals updated from log.');
+  alert('Coverage totals, last-covered, and previous-covered dates updated from log.');
 }
 
 let _rosSortCol = 'name';
