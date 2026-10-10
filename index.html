@@ -3066,7 +3066,7 @@ function renderOutput(assignments, unassigned, conflicts, dateStr, lockedCount, 
     byTeacher[a.absentTeacher].push(a);
   });
 
-  const rawEmailTemplate = localStorage.getItem('cs_email_template') || 'Hi, you have been assigned coverage for {{date}}. Rosters are attached. Please email any absences to FrontOffice@yorkprep.org - thank you!';
+  const rawEmailTemplate = localStorage.getItem('cs_email_template') || 'Hi, you have been assigned coverage for {{date}}. Rosters are attached. Please email any absences to FrontOffice@yourschool.org - thank you!';
   const savedEmailBody = rawEmailTemplate.replace(/\{\{date\}\}/g, dayShort);
   const savedNotes = JSON.parse(localStorage.getItem('cs_notes_' + dateStr) || '{}');
 
