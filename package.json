@@ -1,0 +1,22 @@
+{
+  "name": "coverage-tracker",
+  "version": "1.0.0",
+  "description": "Single-file coverage assignment app. See README.md. This package.json exists only to run the Playwright test suite; there is no build or server.",
+  "private": true,
+  "scripts": {
+    "test": "playwright test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ehborden/coverage-tracker.git"
+  },
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ehborden/coverage-tracker/issues"
+  },
+  "homepage": "https://github.com/ehborden/coverage-tracker#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "axe-core": "^4.14.0"
+  }
+}
