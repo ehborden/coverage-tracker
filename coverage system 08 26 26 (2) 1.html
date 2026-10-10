@@ -20,7 +20,7 @@
     --white: #ffffff;
     --gray-100: #f0f4f8;
     --gray-200: #dde4ed;
-    --gray-400: #8fa3bc;
+    --gray-400: #5d6b82;
     --gray-600: #4d6480;
     --gray-800: #1c212e;
     --green: #1a6b3c;
@@ -37,6 +37,17 @@
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* Visually hidden but still read by screen readers — for a table
+     header whose column is icon-only (row action buttons). */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
 
   body {
     font-family: 'DM Sans', sans-serif;
@@ -76,7 +87,7 @@
   .nav-btn {
     background: none;
     border: none;
-    color: rgba(255,255,255,0.6);
+    color: rgba(255,255,255,0.82);
     padding: 8px 14px;
     border-radius: var(--radius-sm);
     cursor: pointer;
@@ -642,19 +653,19 @@
 </head>
 <body>
 
-<div class="header">
+<header class="header">
   <div style="display:flex;align-items:center;gap:14px">
-    <div class="header-title">Coverage <span>System</span></div>
-    <button id="undo-btn" class="nav-btn" style="background:rgba(255,255,255,0.1);opacity:0.35;pointer-events:none" onclick="undoLastAction()" title="Nothing to undo yet">↶ Undo</button>
+    <h1 class="header-title">Coverage <span>System</span></h1>
+    <button id="undo-btn" class="nav-btn" style="pointer-events:none" onclick="undoLastAction()" title="Nothing to undo yet">↶ Undo</button>
   </div>
   <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
-    <nav class="nav" id="nav-main">
+    <nav class="nav" id="nav-main" aria-label="Main navigation">
       <button class="nav-btn active" onclick="showScreen('run')">Run Coverage</button>
       <button class="nav-btn" onclick="showScreen('roster')">Roster</button>
       <button class="nav-btn" onclick="showScreen('log')">Log</button>
       <button class="nav-btn" onclick="showScreen('summary')">Summary</button>
     </nav>
-    <nav class="nav" id="nav-data" style="opacity:0.85">
+    <nav class="nav" id="nav-data" aria-label="Data navigation" style="opacity:0.85">
       <button class="nav-btn" onclick="showScreen('schedule')">Schedule</button>
       <button class="nav-btn" onclick="showScreen('roomchart')">Room Chart</button>
       <div style="position:relative;display:inline-block">
@@ -672,11 +683,11 @@
       </div>
     </nav>
   </div>
-</div>
+</header>
 
 
 
-<div class="main">
+<main class="main">
 
   <!-- ══════════════════════════════════════════
        SCREEN: RUN COVERAGE
@@ -695,15 +706,15 @@
       <!-- Date input -->
       <div class="form-row cols-3">
         <div>
-          <label>Date</label>
+          <label for="run-date">Date</label>
           <input type="date" id="run-date" onchange="onDateChange()" />
         </div>
         <div>
-          <label>End Date (for range)</label>
+          <label for="run-date-end">End Date (for range)</label>
           <input type="date" id="run-date-end" placeholder="Optional" title="Someone out several days in a row: repeats these same absence rows across every school day through this date." />
         </div>
         <div>
-          <label>Outside Subs Coming</label>
+          <label for="outside-sub-count">Outside Subs Coming</label>
           <select id="outside-sub-count">
             <option value="0">0</option>
             <option value="1">1</option>
@@ -752,7 +763,7 @@
               <th>Section</th>
               <th>Room</th>
               <th style="text-align:center">Type</th>
-              <th></th>
+              <th><span class="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody id="absences-tbody"></tbody>
@@ -800,7 +811,7 @@
       <div id="manual-body" style="display:none;margin-top:16px">
         <div class="form-row" style="margin-bottom:16px;align-items:flex-end">
           <div class="fg">
-            <label>Date</label>
+            <label for="manual-date">Date</label>
             <input type="date" id="manual-date" onchange="renderManualTable()" />
           </div>
           <button class="btn btn-ghost btn-sm" onclick="renderManualTable()">Load</button>
@@ -848,7 +859,7 @@
               <th>Fri</th>
               <th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortRoster('last')">Last Coverage <span id="ros-sort-last"></span></th>
               <th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortRoster('total')">Total <span id="ros-sort-total"></span></th>
-              <th></th>
+              <th><span class="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody id="roster-tbody"></tbody>
@@ -922,7 +933,7 @@
       <div class="flex-between" style="margin-bottom:16px">
         <div class="card-title" style="margin:0">Weekly Coverage Grid</div>
         <div style="display:flex;align-items:center;gap:8px">
-          <input type="date" id="weekly-grid-date" style="font-size:12px;padding:5px 8px" onchange="renderWeeklyGrid()" />
+          <input type="date" id="weekly-grid-date" aria-label="Week to show" style="font-size:12px;padding:5px 8px" onchange="renderWeeklyGrid()" />
           <button class="btn btn-ghost btn-sm" onclick="renderWeeklyGrid()">Refresh</button>
         </div>
       </div>
@@ -941,7 +952,7 @@
       </div>
       <div class="form-row cols-2">
         <div>
-          <label>Date</label>
+          <label for="override-date">Date</label>
           <input type="date" id="override-date" />
         </div>
         <div style="display:flex;align-items:flex-end">
@@ -960,19 +971,19 @@
       <div class="card-title" style="margin-bottom:12px">Add Class</div>
       <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 80px 1fr auto;gap:8px;align-items:end">
         <div>
-          <label style="font-size:11px">Teacher</label>
+          <label style="font-size:11px" for="si-add-teacher">Teacher</label>
           <select id="si-add-teacher" style="width:100%"><option value="">Select...</option></select>
         </div>
         <div>
-          <label style="font-size:11px">Class ID</label>
+          <label style="font-size:11px" for="si-add-section">Class ID</label>
           <input type="text" id="si-add-section" placeholder="e.g. SCI 8-1" style="width:100%" />
         </div>
         <div>
-          <label style="font-size:11px">Course Name</label>
+          <label style="font-size:11px" for="si-add-course">Course Name</label>
           <input type="text" id="si-add-course" placeholder="e.g. Physical Science 8" style="width:100%" />
         </div>
         <div>
-          <label style="font-size:11px">Day</label>
+          <label style="font-size:11px" for="si-add-day">Day</label>
           <select id="si-add-day" style="width:100%">
             <option value="Monday">Monday</option>
             <option value="Tuesday">Tuesday</option>
@@ -982,7 +993,7 @@
           </select>
         </div>
         <div>
-          <label style="font-size:11px">Period</label>
+          <label style="font-size:11px" for="si-add-period">Period</label>
           <select id="si-add-period" style="width:100%">
             <option value="1">1</option>
             <option value="2">2</option>
@@ -994,7 +1005,7 @@
           </select>
         </div>
         <div>
-          <label style="font-size:11px">Room (optional)</label>
+          <label style="font-size:11px" for="si-add-room">Room (optional)</label>
           <input type="text" id="si-add-room" placeholder="e.g. 309" style="width:100%" />
         </div>
         <div>
@@ -1021,7 +1032,7 @@
               <th>Period</th>
               <th>Room (stored)</th>
               <th>Room (chart)</th>
-              <th></th>
+              <th><span class="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody id="schedule-inspector-tbody"></tbody>
@@ -1058,7 +1069,7 @@
     </div>
   </div>
 
-</div><!-- /main -->
+</main><!-- /main -->
 
 <!-- ══════════════════════════════════════════
      MODALS
@@ -1154,7 +1165,7 @@
     <div class="modal-title">Reset a Day</div>
     <p style="color:var(--gray-600);margin-bottom:16px;font-size:13px">This will remove all log entries for the selected date and roll back teacher coverage counts and dates.</p>
     <div>
-      <label>Date to Reset</label>
+      <label for="reset-date">Date to Reset</label>
       <input type="date" id="reset-date" />
     </div>
     <div class="flex-end mt-20">
@@ -1695,11 +1706,18 @@ function updateUndoButton() {
   if (!btn) return;
   const top = _undoStack[_undoStack.length - 1];
   if (top) {
-    btn.style.opacity = '1';
+    // Solid color, not reduced opacity — opacity on this dark header
+    // compounds with the button's own translucent styling and crushes
+    // contrast to near-unreadable.
+    btn.style.color = '#fff';
+    btn.style.background = 'rgba(255,255,255,0.18)';
     btn.style.pointerEvents = 'auto';
     btn.title = 'Undo: ' + top.label;
   } else {
-    btn.style.opacity = '0.35';
+    // Falls back to the plain .nav-btn look (same dimmed style every
+    // other inactive nav button already uses).
+    btn.style.color = '';
+    btn.style.background = '';
     btn.style.pointerEvents = 'none';
     btn.title = 'Nothing to undo yet';
   }
@@ -1828,7 +1846,7 @@ function addAbsenceRow() {
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td>
-      <select class="abs-teacher" style="width:100%">
+      <select class="abs-teacher" aria-label="Absent teacher" style="width:100%">
         <option value="">Select teacher...</option>
         ${names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}
         <option value="__custom__">Type name manually...</option>
@@ -1836,7 +1854,7 @@ function addAbsenceRow() {
       <input class="abs-teacher-custom" type="text" placeholder="Enter name exactly" style="display:none;margin-top:4px" />
     </td>
     <td>
-      <select class="abs-period" style="width:100%">
+      <select class="abs-period" aria-label="Period" style="width:100%">
         ${PERIODS.map(p => `<option value="${p}">${p}</option>`).join('')}
       </select>
     </td>
@@ -1844,7 +1862,7 @@ function addAbsenceRow() {
     <td><input class="abs-section" type="text" placeholder="01" style="width:80px" /></td>
     <td><input class="abs-room" type="text" placeholder="204" style="width:60px" /></td>
     <td>
-      <select class="abs-type" style="width:100%;font-size:12px;padding:4px 6px">
+      <select class="abs-type" aria-label="Absence type" style="width:100%;font-size:12px;padding:4px 6px">
         <option value="normal">Staff</option>
         <option value="tardy">Tardy</option>
         <option value="outside">Outside Sub</option>
@@ -3019,7 +3037,7 @@ function setTierByName(name, tier) {
 }
 
 function tierSelectHtml(current, onchangeAttr) {
-  return `<select class="tier-inline" onchange="${onchangeAttr}">`
+  return `<select class="tier-inline" aria-label="Tier" onchange="${onchangeAttr}">`
     + ['1', '2', '3', 'E'].map(v =>
         `<option value="${v}"${v === current ? ' selected' : ''}>${v === 'E' ? 'E' : v}</option>`
       ).join('')
@@ -3395,7 +3413,7 @@ function renderOverrideTable() {
         <th style="${thStyle}" onclick="sortOverrideBy('course')">Course${arrow('course')}</th>
         <th style="${thStyle}" onclick="sortOverrideBy('covering')">Current Assignment${arrow('covering')}</th>
         <th>Override To</th>
-        <th></th>
+        <th><span class="sr-only">Actions</span></th>
       </tr></thead>
       <tbody>
         ${sorted.map((e) => `<tr>
