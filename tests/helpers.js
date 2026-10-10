@@ -1,6 +1,6 @@
 const path = require('path');
 
-const APP_PATH = path.resolve(__dirname, '..', 'coverage system 08 26 26 (2) 1.html');
+const APP_PATH = path.resolve(__dirname, '..', 'index.html');
 const APP_URL = 'file://' + APP_PATH;
 
 // Loads the app fresh. Playwright gives each test an isolated browser
