@@ -74,6 +74,7 @@
   .header-title {
     font-family: 'DM Serif Display', serif;
     font-size: 20px;
+    font-weight: normal; /* <h1> picks up the browser's bold default otherwise */
     letter-spacing: 0.3px;
     color: var(--white);
   }
@@ -99,6 +100,9 @@
   }
   .nav-btn:hover { background: rgba(255,255,255,0.1); color: var(--white); }
   .nav-btn.active { background: var(--gold); color: var(--navy-dark); font-weight: 600; }
+  /* Toggled by class, not inline style, so :hover still cascades normally. */
+  #undo-btn.undo-active { color: #fff; background: rgba(255,255,255,0.18); }
+  #undo-btn.undo-active:hover { background: rgba(255,255,255,0.28); }
 
   /* ── MAIN ── */
   .main { max-width: 1100px; margin: 0 auto; padding: 28px 24px; }
@@ -1081,11 +1085,11 @@
     <div class="modal-title" id="teacher-modal-title">Add Teacher</div>
     <div class="form-row cols-2">
       <div>
-        <label>Full Name</label>
+        <label for="t-name">Full Name</label>
         <input type="text" id="t-name" placeholder="Last First" />
       </div>
       <div>
-        <label>Tier</label>
+        <label for="t-tier">Tier</label>
         <select id="t-tier">
           <option value="1">Tier 1 — Called most</option>
           <option value="2">Tier 2 — Moderate</option>
@@ -1096,14 +1100,14 @@
     </div>
     <div class="form-row cols-2">
       <div>
-        <label>High Availability</label>
+        <label for="t-high-avail">High Availability</label>
         <select id="t-high-avail">
           <option value="">No</option>
           <option value="Y">Yes (3-class teacher)</option>
         </select>
       </div>
       <div>
-        <label>Temporarily Excluded</label>
+        <label for="t-excluded">Temporarily Excluded</label>
         <select id="t-excluded">
           <option value="">No</option>
           <option value="Y">Yes</option>
@@ -1112,18 +1116,18 @@
     </div>
 
     <div style="margin-bottom:6px;margin-top:8px">
-      <label>Availability by Day & Period</label>
+      <label id="avail-grid-label">Availability by Day & Period</label>
       <div style="font-size:11px;color:var(--gray-400);margin-bottom:8px">Click periods to toggle availability</div>
     </div>
     <div id="avail-grid"></div>
 
     <div class="form-row cols-2" style="margin-top:12px">
       <div>
-        <label>Last Coverage Date</label>
+        <label for="t-last-date">Last Coverage Date</label>
         <input type="date" id="t-last-date" />
       </div>
       <div>
-        <label>Total Coverages (Year)</label>
+        <label for="t-total">Total Coverages (Year)</label>
         <input type="number" id="t-total" value="0" min="0" />
       </div>
     </div>
@@ -1142,7 +1146,7 @@
     <p style="font-size:12px;color:var(--gray-400);margin-bottom:16px">Select a teacher, then check which periods need coverage. Course info will auto-fill from the loaded schedule.</p>
 
     <div style="margin-bottom:16px">
-      <label>Absent Teacher</label>
+      <label for="abt-teacher">Absent Teacher</label>
       <select id="abt-teacher" style="width:100%" onchange="loadTeacherPeriods()">
         <option value="">Select teacher...</option>
       </select>
@@ -1706,18 +1710,16 @@ function updateUndoButton() {
   if (!btn) return;
   const top = _undoStack[_undoStack.length - 1];
   if (top) {
-    // Solid color, not reduced opacity — opacity on this dark header
-    // compounds with the button's own translucent styling and crushes
-    // contrast to near-unreadable.
-    btn.style.color = '#fff';
-    btn.style.background = 'rgba(255,255,255,0.18)';
+    // Toggled via a class, not inline style — solid color (not reduced
+    // opacity, which compounds with the button's translucent styling and
+    // crushes contrast) while still letting :hover cascade normally.
+    btn.classList.add('undo-active');
     btn.style.pointerEvents = 'auto';
     btn.title = 'Undo: ' + top.label;
   } else {
     // Falls back to the plain .nav-btn look (same dimmed style every
     // other inactive nav button already uses).
-    btn.style.color = '';
-    btn.style.background = '';
+    btn.classList.remove('undo-active');
     btn.style.pointerEvents = 'none';
     btn.title = 'Nothing to undo yet';
   }
