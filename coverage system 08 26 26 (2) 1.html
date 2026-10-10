@@ -104,6 +104,11 @@
   #undo-btn.undo-active { color: #fff; background: rgba(255,255,255,0.18); }
   #undo-btn.undo-active:hover { background: rgba(255,255,255,0.28); }
 
+  #sync-pill { font-size: 11px; padding: 6px 12px; }
+  #sync-pill.ok { color: #9ee6b8; }
+  #sync-pill.error, #sync-pill.offline { color: #ffb4b4; }
+  #sync-pill.busy, #sync-pill.pending { color: var(--gold); }
+
   /* ── MAIN ── */
   .main { max-width: 1100px; margin: 0 auto; padding: 28px 24px; }
 
@@ -661,6 +666,7 @@
   <div style="display:flex;align-items:center;gap:14px">
     <h1 class="header-title">Coverage <span>System</span></h1>
     <button id="undo-btn" class="nav-btn" style="pointer-events:none" onclick="undoLastAction()" title="Nothing to undo yet">↶ Undo</button>
+    <button id="sync-pill" class="nav-btn off" onclick="openSyncModal()" title="Sync settings">Sync off</button>
   </div>
   <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
     <nav class="nav" id="nav-main" aria-label="Main navigation">
@@ -680,6 +686,9 @@
           <label style="display:block;width:100%;text-align:left;padding:8px 16px;color:white;font-family:inherit;font-size:13px;font-weight:400;text-transform:none;letter-spacing:normal;margin-bottom:0;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Restore
             <input type="file" accept=".json" style="display:none" onchange="importAllData(event);toggleDataMenu()" />
           </label>
+          <div style="height:1px;background:rgba(255,255,255,0.15);margin:4px 0"></div>
+          <button onclick="openSyncModal();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:white;font-family:inherit;font-size:13px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Sync with GitHub</button>
+          <button onclick="openRestoreGithubModal();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:white;font-family:inherit;font-size:13px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Restore from GitHub</button>
           <div style="height:1px;background:rgba(255,255,255,0.15);margin:4px 0"></div>
           <button onclick="startNewYear();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:white;font-family:inherit;font-size:13px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Start New Year</button>
           <button onclick="clearRoster();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:#ff9d9d;font-family:inherit;font-size:13px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Clear Roster</button>
@@ -1196,6 +1205,45 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="sync-modal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-title">Sync with GitHub</div>
+    <p style="color:var(--gray-600);margin-bottom:16px;font-size:13px">Saves the roster, log, schedule, room chart, and day-to-day entries to a private GitHub repo, so every computer that connects sees the same data. Set this up once on each computer.</p>
+    <div>
+      <label for="sync-owner">GitHub username</label>
+      <input type="text" id="sync-owner" autocomplete="off" autocapitalize="off" />
+    </div>
+    <div style="margin-top:10px">
+      <label for="sync-repo">Private repo name</label>
+      <input type="text" id="sync-repo" autocomplete="off" autocapitalize="off" placeholder="coverage-tracker-data" />
+    </div>
+    <div style="margin-top:10px">
+      <label for="sync-token">Access token</label>
+      <input type="password" id="sync-token" autocomplete="off" placeholder="github_pat_..." />
+    </div>
+    <p style="color:var(--gray-600);font-size:12px;margin-top:8px">The token is saved only in this browser. It is never included in a backup file.</p>
+    <div id="sync-modal-msg"></div>
+    <div class="flex-end mt-20" style="gap:8px">
+      <button class="btn btn-ghost" id="sync-off-btn" onclick="disconnectSync()" style="display:none;margin-right:auto">Turn off sync</button>
+      <button class="btn btn-ghost" onclick="closeSyncModal()">Cancel</button>
+      <button class="btn btn-primary" id="sync-connect-btn" onclick="connectSync()">Connect</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="restore-github-modal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-title">Restore from GitHub</div>
+    <p style="color:var(--gray-600);margin-bottom:12px;font-size:13px">About once a week, the app saves a full backup to GitHub and keeps the last 12. Pick one to see its date. Nothing changes until you confirm.</p>
+    <div id="restore-github-body" style="max-height:320px;overflow-y:auto"></div>
+    <div class="flex-end mt-20">
+      <button class="btn btn-ghost" onclick="closeRestoreGithubModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="sync-toast" style="display:none;position:fixed;bottom:20px;right:20px;background:var(--navy);color:white;padding:10px 16px;border-radius:8px;font-size:12px;z-index:9999;max-width:320px;box-shadow:var(--shadow-md)"></div>
+
 <script>
 // ═══════════════════════════════════════════════════════
 //  STORAGE ADAPTER
@@ -1449,7 +1497,12 @@ async function getRosterAsync() {
 }
 
 function setRoster(r) {
-  if (STORAGE_MODE === 'local') { setData('cs_roster', r); return; }
+  if (STORAGE_MODE === 'local') {
+    const changed = stampRosterChanges(r);
+    setData('cs_roster', r);
+    if (changed) markDirty('roster');
+    return;
+  }
   // SharePoint writes are handled individually via saveTeacherSP / deleteTeacherSP
   _spCache.roster = r;
 }
@@ -1493,7 +1546,12 @@ async function getLogAsync() {
 }
 
 function setLog(l) {
-  if (STORAGE_MODE === 'local') { setData('cs_log', l); return; }
+  if (STORAGE_MODE === 'local') {
+    const changed = stampLogChanges(l);
+    setData('cs_log', l);
+    if (changed) markDirty('log');
+    return;
+  }
   _spCache.log = l;
   // Writes handled via appendLogEntriesSP / updateLogEntrySP
 }
@@ -1760,6 +1818,592 @@ window.addEventListener('beforeunload', () => {
 });
 
 // ═══════════════════════════════════════════════════════
+//  GITHUB SYNC
+//  Optional. Off until someone fills in Sync with GitHub.
+//  Saves the roster, log, schedule, room chart, and the day-to-day
+//  stuff (absences/notes/outside-sub counts/email template/senior
+//  flag, bundled as one "daily" file) to a private GitHub repo, so
+//  every computer that connects sees the same data instead of relying
+//  on manually passing a backup file around.
+//
+//  The token lives only in this browser's localStorage. It is never
+//  written into the HTML file, a backup, or sent anywhere except
+//  api.github.com.
+//
+//  Roster and log are merged item by item: every item gets an
+//  "updated" timestamp, stamped automatically by setRoster/setLog
+//  comparing against a baseline of what was last saved, and a removed
+//  item leaves a tombstone so the deletion itself can propagate. A
+//  teacher's totalCoverages/lastCoverageDate/previousCoverageDate are
+//  deliberately left out of that comparison and out of the merge
+//  itself; they're always recomputed from the merged log afterward
+//  (deriveCoverageStatsFromLog), so two devices both logging coverage
+//  while offline don't stomp each other's counts.
+//
+//  Schedule, room chart, and the daily bundle are bulk reloads (a CSV
+//  import, a day's absences), not item-level edits, so those three
+//  sync as a whole blob: newest "updated" timestamp wins outright.
+// ═══════════════════════════════════════════════════════
+
+const SYNC_KEY = 'cs_sync';
+const POLL_MS = 60000;
+const TOMBSTONE_DAYS = 90;
+const AUTO_BACKUP_DAYS = 7;
+const AUTO_BACKUP_KEEP = 12;
+const BACKUP_DIR = 'backups';
+const BACKUP_NAME_RE = /^coverage backup (\d{4}-\d{2}-\d{2})\.json$/;
+const SYNC_FILENAME = { roster: 'roster.json', log: 'log.json', schedule: 'schedule.json', roomchart: 'roomchart.json', daily: 'daily.json' };
+const SYNC_FILES = ['roster', 'log', 'schedule', 'roomchart', 'daily'];
+
+function loadSync() { try { return JSON.parse(localStorage.getItem(SYNC_KEY)) || null; } catch { return null; } }
+let sync = loadSync();
+let syncStatus = { kind: 'off', msg: '', at: null };
+const _dirty = new Set();
+let _pushTimer = null;
+let _syncing = false;
+let _syncAgain = false;
+let _autoBackupRunning = false;
+
+function syncOn() { return !!(sync && sync.token && sync.owner && sync.repo); }
+
+function markDirty(name) {
+  if (!syncOn()) return;
+  _dirty.add(name);
+  if (!['error', 'offline'].includes(syncStatus.kind)) setSyncStatus('pending');
+  clearTimeout(_pushTimer);
+  _pushTimer = setTimeout(() => runSync(), 1500);
+}
+
+let _lastErrorToast = '';
+function setSyncStatus(kind, msg) {
+  syncStatus = { kind, msg: msg || '', at: kind === 'ok' ? new Date() : syncStatus.at };
+  if (kind === 'error' && msg !== _lastErrorToast) syncToast(msg);
+  _lastErrorToast = kind === 'error' ? msg : (kind === 'ok' || kind === 'off' ? '' : _lastErrorToast);
+  renderSyncPill();
+}
+
+function renderSyncPill() {
+  const el = document.getElementById('sync-pill');
+  if (!el) return;
+  const k = syncOn() ? syncStatus.kind : 'off';
+  const text = {
+    off: 'Sync off', pending: 'Saving...', busy: 'Syncing...',
+    ok: 'Synced', offline: 'Offline', error: 'Sync problem',
+  }[k] || 'Sync';
+  el.textContent = text;
+  el.className = 'nav-btn ' + k;
+  el.title = k === 'ok' && syncStatus.at
+    ? 'Last synced ' + syncStatus.at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    : k === 'offline' ? 'Cannot reach GitHub. Changes are saved on this computer and will sync when it can.'
+    : syncStatus.msg || 'Sync settings';
+}
+
+let _toastTimer = null;
+function syncToast(msg) {
+  const el = document.getElementById('sync-toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = 'block';
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { el.style.display = 'none'; }, 6000);
+}
+
+function gh(path, opts = {}) {
+  const headers = { 'Accept': 'application/vnd.github+json', 'Authorization': `Bearer ${sync.token}` };
+  if (opts.body) headers['Content-Type'] = 'application/json';
+  return fetch(`https://api.github.com/repos/${encodeURIComponent(sync.owner)}/${encodeURIComponent(sync.repo)}${path}`,
+    Object.assign({ cache: 'no-store' }, opts, { headers }));
+}
+
+class SyncError extends Error {
+  constructor(kind, msg) { super(msg); this.kind = kind; }
+}
+
+function httpError(res) {
+  if (res.status === 401) return new SyncError('error', 'Your GitHub token stopped working (it may have expired). Open Sync with GitHub and paste a new one.');
+  if (res.status === 404) return new SyncError('error', `Can't find the repo "${sync.owner}/${sync.repo}", or the token isn't allowed to see it.`);
+  if (res.status === 403 || res.status === 429) return new SyncError('error', 'GitHub refused the save. Check that the token has Contents set to "Read and write".');
+  return new SyncError('error', `GitHub said ${res.status}. Your changes are safe on this computer.`);
+}
+
+function toB64(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+function fromB64(b64) {
+  const bin = atob(b64.replace(/\s/g, ''));
+  return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0)));
+}
+
+async function fetchRemote(name) {
+  const res = await gh(`/contents/${SYNC_FILENAME[name]}?t=${Date.now()}`);
+  if (res.status === 404) {
+    // Could be "file not made yet" (fine) or "repo not visible" (not fine)
+    const repo = await gh('');
+    if (!repo.ok) throw httpError(repo);
+    return { sha: null, data: null };
+  }
+  if (!res.ok) throw httpError(res);
+  const j = await res.json();
+  return { sha: j.sha, data: JSON.parse(fromB64(j.content || '')) };
+}
+
+// ── Change tracking for roster + log ────────────────────
+// Mirrors the undo system's idea of a snapshot, but compares by id
+// (teacher id / date+teacher+period) instead of array position, and
+// keeps the comparison running between saves instead of one-shot.
+
+function sigOf(item, omit) {
+  const copy = Object.assign({}, item);
+  omit.forEach(k => delete copy[k]);
+  return JSON.stringify(copy);
+}
+
+const ROSTER_OMIT = ['updated', 'totalCoverages', 'lastCoverageDate', 'previousCoverageDate', '_spId'];
+const LOG_OMIT = ['updated'];
+const logKey = e => `${e.date}||${e.absentTeacher}||${e.period}`;
+
+function loadTombstones(key) { try { return JSON.parse(localStorage.getItem(key)) || {}; } catch { return {}; } }
+function saveTombstones(key, map) { try { localStorage.setItem(key, JSON.stringify(map)); } catch {} }
+
+let _rosterBaseline = {};
+let _logBaseline = {};
+let _rosterDeleted = loadTombstones('cs_roster_deleted');
+let _logDeleted = loadTombstones('cs_log_deleted');
+
+function setRosterBaseline(roster) {
+  const m = {};
+  roster.forEach(t => m[t.id] = sigOf(t, ROSTER_OMIT));
+  _rosterBaseline = m;
+}
+function setLogBaseline(log) {
+  const m = {};
+  log.forEach(e => m[logKey(e)] = sigOf(e, LOG_OMIT));
+  _logBaseline = m;
+}
+
+// Diffs against the baseline left by the last save or sync, stamps
+// anything new or changed with "now", and tombstones anything that
+// dropped out. Returns whether anything actually changed.
+function stampRosterChanges(roster) {
+  const now = Date.now();
+  const seen = {};
+  let changed = false;
+  roster.forEach(t => {
+    const sig = sigOf(t, ROSTER_OMIT);
+    if (_rosterBaseline[t.id] !== sig) { t.updated = now; changed = true; }
+    seen[t.id] = sig;
+    if (_rosterDeleted[t.id]) delete _rosterDeleted[t.id];
+  });
+  Object.keys(_rosterBaseline).forEach(id => { if (!seen[id]) { _rosterDeleted[id] = now; changed = true; } });
+  _rosterBaseline = seen;
+  if (changed) saveTombstones('cs_roster_deleted', _rosterDeleted);
+  return changed;
+}
+
+function stampLogChanges(log) {
+  const now = Date.now();
+  const seen = {};
+  let changed = false;
+  log.forEach(e => {
+    const sig = sigOf(e, LOG_OMIT);
+    const k = logKey(e);
+    if (_logBaseline[k] !== sig) { e.updated = now; changed = true; }
+    seen[k] = sig;
+    if (_logDeleted[k]) delete _logDeleted[k];
+  });
+  Object.keys(_logBaseline).forEach(k => { if (!seen[k]) { _logDeleted[k] = now; changed = true; } });
+  _logBaseline = seen;
+  if (changed) saveTombstones('cs_log_deleted', _logDeleted);
+  return changed;
+}
+
+// Writes an already-merged roster/log straight to storage and resets
+// the baseline to match it exactly, bypassing stampRosterChanges /
+// stampLogChanges — a merge result already carries the right
+// "updated" on each item (whichever side's copy it kept), and
+// re-stamping here would overwrite that with "now".
+function writeRosterMerged(roster, deleted) {
+  setData('cs_roster', roster);
+  setRosterBaseline(roster);
+  _rosterDeleted = deleted;
+  saveTombstones('cs_roster_deleted', _rosterDeleted);
+}
+function writeLogMerged(log, deleted) {
+  setData('cs_log', log);
+  setLogBaseline(log);
+  _logDeleted = deleted;
+  saveTombstones('cs_log_deleted', _logDeleted);
+}
+
+function canonItems(items) { return JSON.stringify(items.map(i => JSON.stringify(i)).sort()); }
+function canonDeleted(deleted) { return JSON.stringify(Object.keys(deleted).sort().map(k => k + ':' + deleted[k])); }
+
+// Keeps whichever copy of each item has the newer "updated" (local
+// wins a tie), folds deletion records from both sides together, and
+// drops any tombstone older than TOMBSTONE_DAYS so that map doesn't
+// grow forever.
+function mergeByKey(localItems, remoteItems, keyFn, localDeleted, remoteDeleted) {
+  const deleted = Object.assign({}, remoteDeleted);
+  Object.entries(localDeleted).forEach(([k, ts]) => { if (!deleted[k] || ts > deleted[k]) deleted[k] = ts; });
+  const byKey = new Map();
+  [...remoteItems, ...localItems].forEach(item => {
+    const k = keyFn(item);
+    const cur = byKey.get(k);
+    if (!cur || (item.updated || 0) >= (cur.updated || 0)) byKey.set(k, item);
+  });
+  const cutoff = Date.now() - TOMBSTONE_DAYS * 86400000;
+  Object.keys(deleted).forEach(k => { if (deleted[k] < cutoff) delete deleted[k]; });
+  const items = [...byKey.values()].filter(item => !(deleted[keyFn(item)] && deleted[keyFn(item)] >= (item.updated || 0)));
+  return { items, deleted };
+}
+
+async function syncItemFile(name, attempt = 0) {
+  const keyFn = name === 'roster' ? (t => t.id) : logKey;
+  const stamp = name === 'roster' ? stampRosterChanges : stampLogChanges;
+  const get = name === 'roster' ? getRoster : getLog;
+  const getDeleted = () => name === 'roster' ? _rosterDeleted : _logDeleted;
+  const write = name === 'roster' ? writeRosterMerged : writeLogMerged;
+
+  const remote = await fetchRemote(name);
+  stamp(get()); // stamp anything edited on this device while the request was out
+  const before = canonItems(get());
+  const remoteItems = remote.data && Array.isArray(remote.data.items) ? remote.data.items : [];
+  const remoteDeleted = remote.data && remote.data.deleted && typeof remote.data.deleted === 'object' ? remote.data.deleted : {};
+  const { items: merged, deleted: mergedDeleted } = mergeByKey(get(), remoteItems, keyFn, getDeleted(), remoteDeleted);
+  write(merged, mergedDeleted);
+
+  if (name === 'roster') {
+    // Totals are never merged directly; they're always rebuilt from
+    // whatever the log looks like right now, post-merge.
+    const withStats = deriveCoverageStatsFromLog(getRoster(), getLog());
+    writeRosterMerged(withStats, mergedDeleted);
+  }
+
+  const after = canonItems(get());
+  if (after !== before) refreshAfterSync(name);
+
+  if (remote.data && canonItems(remoteItems) === canonItems(get()) && canonDeleted(remoteDeleted) === canonDeleted(mergedDeleted)) return;
+  const body = JSON.stringify({ app: 'coverage-tracker', file: name, savedAt: new Date().toISOString(), items: name === 'roster' ? getRoster() : get(), deleted: mergedDeleted }, null, 1);
+  const put = { message: `Update ${name}`, content: toB64(body) };
+  if (remote.sha) put.sha = remote.sha;
+  const res = await gh(`/contents/${SYNC_FILENAME[name]}`, { method: 'PUT', body: JSON.stringify(put) });
+  // 409/422 means another computer saved in between; read again and re-merge
+  if ((res.status === 409 || res.status === 422) && attempt < 3) return syncItemFile(name, attempt + 1);
+  if (!res.ok) throw httpError(res);
+}
+
+function refreshAfterSync(name) {
+  const modalOpen = document.querySelector('.modal-overlay.open');
+  const a = document.activeElement;
+  const typing = a && ['INPUT', 'TEXTAREA', 'SELECT'].includes(a.tagName);
+  if (modalOpen || typing) return;
+  if (name === 'roster') { renderRoster(); refreshAbsenceDropdowns(); populateAbtTeacherDropdown(); }
+  if (name === 'log') {
+    renderLog();
+    if (document.getElementById('screen-summary')?.classList.contains('active')) { renderSummary(); renderWeeklyGrid(); }
+  }
+  updateUndoButton();
+}
+
+// ── Whole-blob sync for schedule / room chart / the daily bundle ───
+// Each of these is one JSON blob with its own "updated" stamp.
+// Whichever side's stamp is newer replaces the other outright.
+
+function touchBlob(name) {
+  setData('cs_' + name + '_updated', Date.now());
+  markDirty(name);
+}
+
+function buildDailyBlob() {
+  const payload = buildBackupPayload();
+  return {
+    absences: payload.absences,
+    notes: payload.notes,
+    outsideSubCounts: payload.outsideSubCounts,
+    seniorClassesEnded: payload.seniorClassesEnded,
+    emailTemplate: payload.emailTemplate,
+  };
+}
+
+function applyDailyBlob(data) {
+  Object.entries(data.absences || {}).forEach(([date, abs]) => setData('cs_absences_' + date, abs));
+  Object.entries(data.notes || {}).forEach(([date, notes]) => localStorage.setItem('cs_notes_' + date, JSON.stringify(notes)));
+  Object.entries(data.outsideSubCounts || {}).forEach(([date, count]) => setData('cs_outsidesubcount_' + date, count));
+  if (data.seniorClassesEnded !== undefined) localStorage.setItem('cs_senior_ended', data.seniorClassesEnded);
+  if (data.emailTemplate !== undefined) localStorage.setItem('cs_email_template', data.emailTemplate);
+  loadSeniorClassesFlag();
+  if (document.getElementById('screen-run')?.classList.contains('active')) {
+    const a = document.activeElement;
+    if (!(a && ['INPUT', 'TEXTAREA', 'SELECT'].includes(a.tagName) && a.closest('#absences-tbody'))) renderAbsencesTable();
+  }
+}
+
+// Checked at the start of every sync pass (same idea as stampRosterChanges,
+// but for one blob instead of items) so an edit made through one of the many
+// small call sites that touch these keys still gets picked up without each
+// of them having to remember to call markDirty itself.
+let _dailyBaselineSig = null;
+function checkDailyChanged() {
+  const sig = JSON.stringify(buildDailyBlob());
+  if (_dailyBaselineSig === null) { _dailyBaselineSig = sig; return; }
+  if (sig !== _dailyBaselineSig) {
+    _dailyBaselineSig = sig;
+    touchBlob('daily');
+  }
+}
+
+const BLOB_SYNC = {
+  schedule: {
+    get: () => ({ data: scheduleData, updated: getData('cs_schedule_updated', 0) }),
+    write(data, updated) {
+      scheduleData = data || {};
+      setData('cs_schedule', scheduleData);
+      setData('cs_schedule_updated', updated);
+      const count = Object.keys(scheduleData).length;
+      const el = document.getElementById('schedule-status');
+      if (el && count > 0) el.textContent = `✓ ${count} teachers loaded`;
+    },
+  },
+  roomchart: {
+    get: () => ({ data: roomChartData, updated: getData('cs_roomchart_updated', 0) }),
+    write(data, updated) {
+      roomChartData = data || {};
+      setData('cs_roomchart', roomChartData);
+      setData('cs_roomchart_updated', updated);
+      const count = Object.keys(roomChartData).length;
+      const el = document.getElementById('roomchart-status');
+      if (el && count > 0) el.textContent = `✓ ${count} classes in room chart`;
+    },
+  },
+  daily: {
+    get: () => ({ data: buildDailyBlob(), updated: getData('cs_daily_updated', 0) }),
+    write(data, updated) {
+      applyDailyBlob(data || {});
+      setData('cs_daily_updated', updated);
+      _dailyBaselineSig = JSON.stringify(buildDailyBlob());
+    },
+  },
+};
+
+async function syncBlobFile(name, attempt = 0) {
+  const cfg = BLOB_SYNC[name];
+  const remote = await fetchRemote(name);
+  const local = cfg.get();
+  let finalData = local.data;
+  let finalUpdated = local.updated || 0;
+  if (remote.data && (remote.data.updated || 0) > finalUpdated) {
+    cfg.write(remote.data.data, remote.data.updated);
+    finalData = remote.data.data;
+    finalUpdated = remote.data.updated;
+  }
+  if (remote.data && JSON.stringify(remote.data.data) === JSON.stringify(finalData) && (remote.data.updated || 0) === finalUpdated) return;
+  const body = JSON.stringify({ app: 'coverage-tracker', file: name, savedAt: new Date().toISOString(), updated: finalUpdated, data: finalData }, null, 1);
+  const put = { message: `Update ${name}`, content: toB64(body) };
+  if (remote.sha) put.sha = remote.sha;
+  const res = await gh(`/contents/${SYNC_FILENAME[name]}`, { method: 'PUT', body: JSON.stringify(put) });
+  if ((res.status === 409 || res.status === 422) && attempt < 3) return syncBlobFile(name, attempt + 1);
+  if (!res.ok) throw httpError(res);
+}
+
+async function syncFile(name, attempt = 0) {
+  return (name === 'roster' || name === 'log') ? syncItemFile(name, attempt) : syncBlobFile(name, attempt);
+}
+
+// ── Running the sync ─────────────────────────────────────
+
+async function runSync(names) {
+  if (!syncOn()) return;
+  if (_syncing) { (names || []).forEach(n => _dirty.add(n)); _syncAgain = true; return; }
+  clearTimeout(_pushTimer);
+  _syncing = true;
+  setSyncStatus('busy');
+  checkDailyChanged();
+  const todo = new Set([...(names || []), ..._dirty]);
+  _dirty.clear();
+  // Coverage totals are derived from the log, so the two always travel
+  // together: a log-only edit (e.g. an Override) still needs a roster
+  // pass to re-derive totals, and a roster sync needs the freshest log.
+  if (todo.has('roster') || todo.has('log')) { todo.add('roster'); todo.add('log'); }
+  const order = ['log', 'roster', 'schedule', 'roomchart', 'daily'].filter(n => todo.has(n));
+  try {
+    for (const name of order) await syncFile(name);
+    setSyncStatus('ok');
+    // Every file is fresh only after a full sync (page load), so back up then
+    if (SYNC_FILES.every(n => order.includes(n))) autoBackup();
+  } catch (e) {
+    order.forEach(n => _dirty.add(n));
+    if (e instanceof SyncError) setSyncStatus(e.kind, e.message);
+    else setSyncStatus('offline', 'Cannot reach GitHub.');
+  }
+  _syncing = false;
+  if (_syncAgain || (_dirty.size && syncStatus.kind === 'ok')) { _syncAgain = false; runSync(); }
+}
+
+function guessOwner() { return ''; } // file:// has no hostname to guess a GitHub username from
+
+function openSyncModal() {
+  document.getElementById('sync-owner').value = sync?.owner || guessOwner();
+  document.getElementById('sync-repo').value = sync?.repo || 'coverage-tracker-data';
+  document.getElementById('sync-token').value = sync?.token || '';
+  document.getElementById('sync-modal-msg').innerHTML = '';
+  document.getElementById('sync-off-btn').style.display = syncOn() ? '' : 'none';
+  document.getElementById('sync-connect-btn').textContent = syncOn() ? 'Save' : 'Connect';
+  document.getElementById('sync-connect-btn').disabled = false;
+  document.getElementById('sync-modal').classList.add('open');
+}
+function closeSyncModal() { document.getElementById('sync-modal').classList.remove('open'); }
+
+async function connectSync() {
+  const owner = document.getElementById('sync-owner').value.trim();
+  const repo = document.getElementById('sync-repo').value.trim();
+  const token = document.getElementById('sync-token').value.trim();
+  const msg = document.getElementById('sync-modal-msg');
+  const show = (cls, text) => msg.innerHTML = `<div class="alert alert-${cls}" style="display:flex;margin-top:10px">${esc(text)}</div>`;
+  if (!owner || !repo || !token) { show('error', 'Fill in all three boxes.'); return; }
+  const btn = document.getElementById('sync-connect-btn');
+  btn.disabled = true; btn.textContent = 'Checking...';
+  const prev = sync;
+  sync = { owner, repo, token };
+  try {
+    const res = await gh('');
+    if (!res.ok) throw httpError(res);
+    const info = await res.json();
+    if (!info.private) {
+      sync = prev;
+      show('error', `"${repo}" is public, so anyone could read this data. Make it private on GitHub (repo Settings, bottom of the page, Change visibility), then try again.`);
+      btn.disabled = false; btn.textContent = syncOn() ? 'Save' : 'Connect';
+      return;
+    }
+  } catch (e) {
+    sync = prev;
+    show('error', e instanceof SyncError ? e.message : 'Could not reach GitHub. Check the internet connection.');
+    btn.disabled = false; btn.textContent = syncOn() ? 'Save' : 'Connect';
+    return;
+  }
+  try { localStorage.setItem(SYNC_KEY, JSON.stringify(sync)); } catch {}
+  closeSyncModal();
+  syncToast('Connected. Merging this computer with GitHub...');
+  await runSync(SYNC_FILES);
+  if (syncStatus.kind === 'ok') syncToast('Synced. Everything is now saved to GitHub.');
+}
+
+function disconnectSync() {
+  if (!confirm('Turn off sync on this computer? Data stays here, it just stops syncing.')) return;
+  sync = null;
+  try { localStorage.removeItem(SYNC_KEY); } catch {}
+  setSyncStatus('off');
+  closeSyncModal();
+}
+
+// ── Automatic backups to GitHub ─────────────────────────
+// With sync on, about once a week the app saves a dated backup (the
+// same payload Data > Backup downloads) to backups/ in the data repo,
+// and keeps the newest 12. Any computer can do it; each one checks
+// the folder first so two computers don't both save one the same week.
+
+const backupUrl = name => `/contents/${BACKUP_DIR}/${encodeURIComponent(name)}`;
+
+async function listGitBackups() {
+  const res = await gh(`/contents/${BACKUP_DIR}?t=${Date.now()}`);
+  if (res.status === 404) return [];
+  if (!res.ok) throw httpError(res);
+  const items = await res.json();
+  return (Array.isArray(items) ? items : [])
+    .filter(f => f.type === 'file' && BACKUP_NAME_RE.test(f.name))
+    .map(f => ({ name: f.name, sha: f.sha, date: f.name.match(BACKUP_NAME_RE)[1] }))
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+function daysSince(iso) {
+  if (!iso) return Infinity;
+  return (Date.now() - new Date(iso).getTime()) / 86400000;
+}
+
+async function autoBackup() {
+  if (!syncOn() || _autoBackupRunning) return;
+  if (daysSince(localStorage.getItem('cs_last_autobackup')) < AUTO_BACKUP_DAYS) return;
+  _autoBackupRunning = true;
+  try {
+    const existing = await listGitBackups();
+    const newest = existing[0];
+    if (newest && daysSince(newest.date + 'T12:00:00') < AUTO_BACKUP_DAYS) {
+      localStorage.setItem('cs_last_autobackup', newest.date + 'T12:00:00');
+    } else {
+      const now = new Date();
+      const dateStr = todayStr();
+      const name = `coverage backup ${dateStr}.json`;
+      const body = JSON.stringify(buildBackupPayload(), null, 1);
+      const res = await gh(backupUrl(name), { method: 'PUT', body: JSON.stringify({ message: `Weekly backup ${dateStr}`, content: toB64(body) }) });
+      // 422 means another computer saved today's already, which is just as good
+      if (!res.ok && res.status !== 422) throw httpError(res);
+      localStorage.setItem('cs_last_autobackup', now.toISOString());
+      const all = [{ name, date: dateStr }, ...existing.filter(f => f.name !== name)];
+      for (const old of all.slice(AUTO_BACKUP_KEEP)) {
+        if (!old.sha) continue;
+        await gh(backupUrl(old.name), { method: 'DELETE', body: JSON.stringify({ message: `Remove old backup ${old.date}`, sha: old.sha }) });
+      }
+    }
+  } catch {
+    // Quiet on purpose, same as the manual backup reminder elsewhere in the app.
+  }
+  _autoBackupRunning = false;
+}
+
+async function openRestoreGithubModal() {
+  if (!syncOn()) { openSyncModal(); return; }
+  const body = document.getElementById('restore-github-body');
+  body.innerHTML = '<p style="color:var(--gray-600);font-size:13px">Looking for backups...</p>';
+  document.getElementById('restore-github-modal').classList.add('open');
+  let list;
+  try { list = await listGitBackups(); }
+  catch (e) {
+    body.innerHTML = `<div class="alert alert-error" style="display:flex">${esc(e instanceof SyncError ? e.message : 'Could not reach GitHub. Check the internet connection.')}</div>`;
+    return;
+  }
+  const label = d => new Date(d + 'T12:00:00').toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  body.innerHTML = list.length
+    ? list.map(f => `<button class="btn btn-ghost" style="display:block;width:100%;text-align:left;margin-top:6px" onclick="restoreGithubBackup('${f.date}')">${esc(label(f.date))}</button>`).join('')
+    : '<p style="color:var(--gray-600);font-size:13px">No backups yet. The first one is saved the next time sync runs with nothing dirty to push.</p>';
+}
+function closeRestoreGithubModal() { document.getElementById('restore-github-modal').classList.remove('open'); }
+
+async function restoreGithubBackup(date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  if (!confirm(`This will replace all current data with the GitHub backup from ${date}.\n\nContinue?`)) return;
+  try {
+    const res = await gh(`${backupUrl(`coverage backup ${date}.json`)}?t=${Date.now()}`);
+    if (!res.ok) throw httpError(res);
+    const j = await res.json();
+    const payload = JSON.parse(fromB64(j.content || ''));
+    closeRestoreGithubModal();
+    await applyBackupPayload(payload);
+    alert('Restore complete!');
+  } catch (e) {
+    syncToast(e instanceof SyncError ? e.message : 'Could not load that backup. Try again in a minute.');
+  }
+}
+
+function initSync() {
+  setRosterBaseline(getRoster());
+  setLogBaseline(getLog());
+  _dailyBaselineSig = JSON.stringify(buildDailyBlob());
+  renderSyncPill();
+  if (!syncOn()) return;
+  runSync(SYNC_FILES);
+  // Pass every file explicitly on each of these triggers — runSync() with
+  // nothing to name only pushes what's already marked dirty, and the whole
+  // point of polling/focus/reconnect is to pull in changes nobody local
+  // marked dirty because they happened on some other computer.
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') runSync(SYNC_FILES); });
+  setInterval(() => { if (document.visibilityState === 'visible') runSync(SYNC_FILES); }, POLL_MS);
+  window.addEventListener('online', () => runSync(SYNC_FILES));
+}
+
+// ═══════════════════════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════════════════════
 
@@ -1773,6 +2417,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await initData();
   renderAbsencesTable();
   renderRoster();
+  initSync();
 });
 
 // ═══════════════════════════════════════════════════════
@@ -2975,13 +3620,11 @@ async function deleteTeacher(id) {
   populateAbtTeacherDropdown();
 }
 
-function recalculateCoveragesFromLog() {
-  if (!confirm('This will reset all coverage totals, last-covered dates, and previous-covered dates to match what is actually in the log. Continue?')) return;
-  pushUndoSnapshot('Recalculate totals from log');
-  const log = getLog();
-  const roster = getRoster();
-
-  // Collect every date per covering teacher from the log
+// Pure: rebuilds each teacher's totalCoverages/lastCoverageDate/previousCoverageDate
+// from the log alone, mutating and returning the same roster array. Also used by
+// the sync engine after merging two devices' logs together, since those three
+// fields are never merged directly (see the GITHUB SYNC section).
+function deriveCoverageStatsFromLog(roster, log) {
   const dateSets = {};
   log.forEach(e => {
     if (!e.coveringTeacher || isSpecialLabel(e.coveringTeacher)) return;
@@ -3002,7 +3645,13 @@ function recalculateCoveragesFromLog() {
       t.previousCoverageDate = '';
     }
   });
+  return roster;
+}
 
+function recalculateCoveragesFromLog() {
+  if (!confirm('This will reset all coverage totals, last-covered dates, and previous-covered dates to match what is actually in the log. Continue?')) return;
+  pushUndoSnapshot('Recalculate totals from log');
+  const roster = deriveCoverageStatsFromLog(getRoster(), getLog());
   setRoster(roster);
   renderRoster();
   alert('Coverage totals, last-covered, and previous-covered dates updated from log.');
@@ -3589,6 +4238,7 @@ function loadScheduleFromStorage() {
 
 function saveScheduleToStorage() {
   try { localStorage.setItem('cs_schedule', JSON.stringify(scheduleData)); } catch(e) {}
+  touchBlob('schedule');
 }
 
 // Meeting time day codes
@@ -4495,69 +5145,7 @@ async function importAllData(event) {
 
       if (!confirm(`This will replace all current data with the backup from ${payload.exportedAt?.slice(0,10) || 'unknown date'}.\n\nContinue?`)) return;
 
-      showLoading('Restoring data...');
-
-      if (STORAGE_MODE === 'local') {
-        // Restore to localStorage
-        setData('cs_roster', payload.roster);
-        setData('cs_log', payload.log);
-        if (payload.schedule) setData('cs_schedule', payload.schedule);
-        if (payload.roomChart) setData('cs_roomchart', payload.roomChart);
-        if (payload.seniorClassesEnded !== undefined) localStorage.setItem('cs_senior_ended', payload.seniorClassesEnded);
-        if (payload.emailTemplate) localStorage.setItem('cs_email_template', payload.emailTemplate);
-        // Restore per-date absences
-        Object.entries(payload.absences || {}).forEach(([date, abs]) => {
-          setData('cs_absences_' + date, abs);
-        });
-        // Restore notes
-        Object.entries(payload.notes || {}).forEach(([date, notes]) => {
-          localStorage.setItem('cs_notes_' + date, JSON.stringify(notes));
-        });
-        // Restore outside sub counts
-        Object.entries(payload.outsideSubCounts || {}).forEach(([date, count]) => {
-          setData('cs_outsidesubcount_' + date, count);
-        });
-      } else {
-        // SharePoint mode: write each collection to SP lists
-        // Roster
-        const existingTeachers = await spGet('Teachers');
-        for (const t of existingTeachers) await spDelete('Teachers', t.id || t.Id);
-        for (const t of payload.roster) {
-          const created = await spPost('Teachers', teacherToSP(t));
-          t._spId = created.id || created.Id;
-        }
-        _spCache.roster = payload.roster;
-
-        // Log
-        const existingLog = await spGet('CoverageLog');
-        for (const e of existingLog) await spDelete('CoverageLog', e.id || e.Id);
-        for (const entry of payload.log) {
-          const created = await spPost('CoverageLog', logEntryToSP(entry));
-          entry._spId = created.id || created.Id;
-        }
-        _spCache.log = payload.log;
-
-        // Absences
-        const existingAbs = await spGet('Absences');
-        for (const a of existingAbs) await spDelete('Absences', a.id || a.Id);
-        for (const [date, absences] of Object.entries(payload.absences || {})) {
-          for (const a of absences) await spPost('Absences', absenceToSP(date, a));
-        }
-
-        // Schedule
-        if (payload.schedule) {
-          scheduleData = payload.schedule;
-          await saveScheduleToSP();
-        }
-      }
-
-      hideLoading();
-      // Reload UI
-      await initData();
-      renderRoster();
-      renderLog();
-      renderAbsencesTable();
-      clearUndoHistory(); // pre-restore snapshots don't belong to the restored data
+      await applyBackupPayload(payload);
       alert('Restore complete!');
     } catch(err) {
       hideLoading();
@@ -4567,9 +5155,91 @@ async function importAllData(event) {
   reader.readAsText(file);
 }
 
-function exportAllData(label) {
-  const today = todayStr();
+// Shared by "Restore" (a local file) and "Restore from GitHub" (a weekly
+// auto-backup pulled from the data repo) — both hand this the same payload
+// shape that exportAllData/buildBackupPayload produces.
+async function applyBackupPayload(payload) {
+  showLoading('Restoring data...');
+  try {
+    if (STORAGE_MODE === 'local') {
+      // A restore replaces local data wholesale rather than merging, so
+      // treat it like a brand-new local state for sync: resetting these
+      // baselines makes every roster/log item look "changed", which gets
+      // it freshly timestamped and pushed on the next sync instead of
+      // silently waiting to see which side a timestamp-based merge favors.
+      _rosterBaseline = {};
+      _logBaseline = {};
+      setData('cs_roster', payload.roster);
+      setData('cs_log', payload.log);
+      markDirty('roster');
+      markDirty('log');
+      if (payload.schedule) setData('cs_schedule', payload.schedule);
+      if (payload.roomChart) setData('cs_roomchart', payload.roomChart);
+      if (payload.seniorClassesEnded !== undefined) localStorage.setItem('cs_senior_ended', payload.seniorClassesEnded);
+      if (payload.emailTemplate) localStorage.setItem('cs_email_template', payload.emailTemplate);
+      // Restore per-date absences
+      Object.entries(payload.absences || {}).forEach(([date, abs]) => {
+        setData('cs_absences_' + date, abs);
+      });
+      // Restore notes
+      Object.entries(payload.notes || {}).forEach(([date, notes]) => {
+        localStorage.setItem('cs_notes_' + date, JSON.stringify(notes));
+      });
+      // Restore outside sub counts
+      Object.entries(payload.outsideSubCounts || {}).forEach(([date, count]) => {
+        setData('cs_outsidesubcount_' + date, count);
+      });
+      touchBlob('schedule');
+      touchBlob('roomchart');
+      markDirty('daily');
+    } else {
+      // SharePoint mode: write each collection to SP lists
+      // Roster
+      const existingTeachers = await spGet('Teachers');
+      for (const t of existingTeachers) await spDelete('Teachers', t.id || t.Id);
+      for (const t of payload.roster) {
+        const created = await spPost('Teachers', teacherToSP(t));
+        t._spId = created.id || created.Id;
+      }
+      _spCache.roster = payload.roster;
 
+      // Log
+      const existingLog = await spGet('CoverageLog');
+      for (const e of existingLog) await spDelete('CoverageLog', e.id || e.Id);
+      for (const entry of payload.log) {
+        const created = await spPost('CoverageLog', logEntryToSP(entry));
+        entry._spId = created.id || created.Id;
+      }
+      _spCache.log = payload.log;
+
+      // Absences
+      const existingAbs = await spGet('Absences');
+      for (const a of existingAbs) await spDelete('Absences', a.id || a.Id);
+      for (const [date, absences] of Object.entries(payload.absences || {})) {
+        for (const a of absences) await spPost('Absences', absenceToSP(date, a));
+      }
+
+      // Schedule
+      if (payload.schedule) {
+        scheduleData = payload.schedule;
+        await saveScheduleToSP();
+      }
+    }
+
+    hideLoading();
+    // Reload UI
+    await initData();
+    renderRoster();
+    renderLog();
+    renderAbsencesTable();
+    clearUndoHistory(); // pre-restore snapshots don't belong to the restored data
+  } catch (err) {
+    hideLoading();
+    throw err;
+  }
+}
+
+function buildBackupPayload() {
   // Collect all absence keys from localStorage
   const absences = {};
   for (let i = 0; i < localStorage.length; i++) {
@@ -4600,7 +5270,7 @@ function exportAllData(label) {
     }
   }
 
-  const payload = {
+  return {
     exportedAt: new Date().toISOString(),
     exportedFrom: window.location.href,
     version: '1.0',
@@ -4614,7 +5284,10 @@ function exportAllData(label) {
     notes,
     outsideSubCounts,
   };
+}
 
+function exportAllData(label) {
+  const payload = buildBackupPayload();
   const json = JSON.stringify(payload, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -4837,6 +5510,7 @@ function loadRoomChartCSV(event) {
       }
 
       localStorage.setItem('cs_roomchart', JSON.stringify(roomChartData));
+      touchBlob('roomchart');
       document.getElementById('roomchart-status').textContent = `✓ ${classCount} classes in room chart`;
       showImportAlert('success', `Room chart loaded: ${classCount} class sections mapped.`);
 
