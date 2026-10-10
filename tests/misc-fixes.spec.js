@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { gotoApp } = require('./helpers');
+const { gotoApp, APP_PATH } = require('./helpers');
 
 test.describe('Misc regression fixes', () => {
   test('Schedule Inspector "Add Class" period dropdown has real options', async ({ page }) => {
@@ -65,8 +65,7 @@ test.describe('Misc regression fixes', () => {
     // only legitimate use of Math.random in the whole app is generating a
     // unique id when a new teacher is added during Sync with Schedule.
     const fs = require('fs');
-    const path = require('path');
-    const html = fs.readFileSync(path.resolve(__dirname, '..', 'coverage system 08 26 26 (2) 1.html'), 'utf8');
+    const html = fs.readFileSync(APP_PATH, 'utf8');
     const matches = [...html.matchAll(/Math\.random/g)];
     expect(matches).toHaveLength(1);
   });

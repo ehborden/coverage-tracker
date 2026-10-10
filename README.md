@@ -4,7 +4,7 @@ A coverage assignment tool for schools: who's absent, who covers them, and keepi
 
 ## What this actually is
 
-`coverage system 08 26 26 (2) 1.html` is the whole application. Open it by double-clicking it (or opening it in a browser via a `file://` link). Everything, your roster, the coverage log, the schedule, the room chart, lives in that browser's `localStorage`, not in the file itself. The HTML file is just code; it has zero data in it.
+`index.html` is the whole application. Open it by double-clicking it (or opening it in a browser via a `file://` link), or visit the hosted copy in any browser (see below). Everything, your roster, the coverage log, the schedule, the room chart, lives in that browser's `localStorage`, not in the file itself. The HTML file is just code; it has zero data in it.
 
 That one fact explains almost everything else below.
 
