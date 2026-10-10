@@ -38,9 +38,30 @@ Restore is **not a merge**. The roster and log are fully replaced with whatever'
 
 ## If you use more than one computer
 
-There is no sync between computers. Each one has its own independent copy of everything in its own browser's `localStorage`. If you enter data on a second computer, run coverage, edit the roster, that computer's changes only exist there until you Export from it and Import that into whichever computer you treat as canonical.
+Without sync (below), there is no connection between computers. Each one has its own independent copy of everything in its own browser's `localStorage`. If you enter data on a second computer, run coverage, edit the roster, that computer's changes only exist there until you Export from it and Import that into whichever computer you treat as canonical.
 
-The same applies to Start New Year (below): running it on one computer does not touch any other computer's data. If more than one computer runs this app, repeat it on each one, or Export the freshly-reset state from one and Restore that everywhere else.
+The same applies to Start New Year (below): running it on one computer does not touch any other computer's data unless sync is on. If more than one computer runs this app without sync, repeat Start New Year on each one, or Export the freshly-reset state from one and Restore that everywhere else.
+
+## Syncing to GitHub (optional)
+
+Data menu → **Sync with GitHub** connects this computer to a private GitHub repo. Every other computer that connects to the *same* repo sees the same roster, log, schedule, room chart, and day-to-day entries, without anyone exporting or importing a file by hand.
+
+**Setting it up:**
+1. Create a private repo on GitHub to hold the data (any name; `coverage-tracker-data` is the suggested default). It must be private, since this is school data, your coverage schedule, and the app refuses to connect to a public one.
+2. Create a [personal access token](https://github.com/settings/tokens) scoped to just that one repo, with Contents set to **Read and write**.
+3. Data menu → Sync with GitHub → enter your GitHub username, the repo name, and the token. Repeat on every computer you want connected.
+
+The token is saved only in that browser's `localStorage`. It's never written into the HTML file and never included in a Backup. Each computer needs its own token entered once.
+
+**What happens once it's on:**
+- Every change (a run, an edit, an override, a Reset Day, a new Schedule or Room Chart CSV) is saved to GitHub within a couple of seconds, and the app checks GitHub for other computers' changes when the tab becomes active, about once a minute while it's open, and when the computer comes back online.
+- The roster and log merge item by item: if two computers each log a coverage while the other was offline, both show up afterward, and totals are rebuilt from the combined log rather than from whichever device happened to sync last. Deleting a teacher or a log entry on one computer removes it everywhere once the others sync. Schedule, Room Chart, and the day-to-day entries (absences, notes, the Outside Subs count, the senior-classes flag, the email template) are each a single saved snapshot; whichever computer saved most recently wins outright for that one.
+- The small pill next to Undo shows the state: **Saving...** (about to push), **Syncing...** (talking to GitHub), **Synced**, **Offline** (can't reach GitHub right now, nothing is lost, it'll catch up), or **Sync problem** (click it to check the token or repo name).
+- About once a week, the app saves a dated backup to a `backups` folder in the data repo and keeps the last 12. Data menu → **Restore from GitHub** lists them by date, the same way Restore does for a local file.
+
+Turning sync off (Sync with GitHub → Turn off sync) stops this computer from syncing; its data stays exactly where it is.
+
+Sync and manual Backup/Restore work together: a manual Restore still fully replaces local data as described above, and with sync on, that restored state is then pushed out to every other connected computer, the same way any other local edit would be.
 
 ## Key features
 
@@ -70,4 +91,4 @@ npx playwright install chromium   # first time only, downloads a browser for the
 npm test
 ```
 
-This runs the Playwright suite in `tests/`: the assignment engine, overrides, Undo, the multi-day range feature, backup/restore, an automated accessibility scan (axe-core) of every screen and modal, and a performance stress test against a synthetic oversized dataset. No test touches your real data, each one seeds its own roster and log in an isolated browser context.
+This runs the Playwright suite in `tests/`: the assignment engine, overrides, Undo, the multi-day range feature, backup/restore, GitHub sync (against a fake, in-memory GitHub API, never the real one), an automated accessibility scan (axe-core) of every screen and modal, and a performance stress test against a synthetic oversized dataset. No test touches your real data or a real GitHub repo; each one seeds its own roster and log in an isolated browser context.
