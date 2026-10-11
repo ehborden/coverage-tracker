@@ -3035,7 +3035,13 @@ function assignCoverage(absences, dateStr, outsideSubCount) {
       const chosen = eligible[0];
       usedToday.add(chosen.name);
       const wk = weeklyCounts[chosen.name] || 0;
-      const reason = `Tier ${chosen.tier} · ${wk} coverage${wk !== 1 ? 's' : ''} this week · Last: ${chosen.lastCoverageDate || 'never'} · Total: ${chosen.totalCoverages || 0}`;
+      // Surfaced so the MS/subject tie-break is checkable from the output
+      // screen itself, not just something happening invisibly in the code —
+      // hover the covering teacher's name to see it on any given pick.
+      const matchNote = levelMatches(chosen)
+        ? (absLevel === 'MS' ? ' · MS match' : ` · Subject match: ${absSubject}`)
+        : '';
+      const reason = `Tier ${chosen.tier} · ${wk} coverage${wk !== 1 ? 's' : ''} this week · Last: ${chosen.lastCoverageDate || 'never'} · Total: ${chosen.totalCoverages || 0}${matchNote}`;
       const entry = { ...ab, coveringTeacher: chosen.name, assignReason: reason };
       assignments.push(entry);
       newEntries.push(entry);

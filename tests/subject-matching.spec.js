@@ -146,4 +146,33 @@ test.describe('MS/subject-aware coverage picks (derived from the Schedule CSV)',
 
     expect(await page.evaluate(() => getLog()[0].coveringTeacher)).toBe('Subject Match');
   });
+
+  test('a matched pick says so in its hover reason, so it can be checked from the output screen without reading code', async ({ page }) => {
+    await gotoApp(page);
+    page.on('dialog', d => d.accept());
+
+    await page.evaluate(() => {
+      setRoster([{ id: 't1', name: 'MS Match', tier: '1', highAvail: false, excluded: false,
+        avail: { Monday: [1], Tuesday: [], Wednesday: [], Thursday: [], Friday: [] },
+        lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0 }]);
+      setLog([]);
+      scheduleData = {
+        'Absent Teacher': [{ day: 'Monday', period: 1, courseName: 'Algebra', section: '', room: '', level: 'MS', subject: 'Mathematics' }],
+        'MS Match': [{ day: 'Tuesday', period: 1, courseName: 'Geometry', section: '', room: '', level: 'MS', subject: 'Mathematics' }],
+      };
+      document.getElementById('run-date').value = '2026-06-01'; // a Monday
+      renderAbsencesTable();
+      const row = document.querySelector('#absences-tbody tr');
+      row.querySelector('.abs-teacher').value = '__custom__';
+      row.querySelector('.abs-teacher-custom').value = 'Absent Teacher';
+      row.querySelector('.abs-period').value = '1';
+      row.querySelector('.abs-course').value = 'Algebra';
+      runCoverage();
+    });
+
+    expect(await page.evaluate(() => getLog()[0].assignReason)).toContain('MS match');
+    // Also visible on the actual output document, not just the log entry.
+    const tooltipText = await page.evaluate(() => document.querySelector('.assign-reason')?.dataset.reason);
+    expect(tooltipText).toContain('MS match');
+  });
 });
