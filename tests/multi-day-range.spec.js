@@ -141,6 +141,102 @@ test.describe('Multi-day range ("End Date (for range)")', () => {
     expect(tuesdayAmy.coveringTeacher).toBe('Jane Smith');
   });
 
+  test('a teacher with a genuinely different set of periods each day gets each day\'s real periods, not day one\'s period numbers repeated', async ({ page }) => {
+    await gotoApp(page);
+    page.on('dialog', d => d.accept());
+
+    await page.evaluate(() => {
+      setRoster([
+        { id: 't1', name: 'Jane Smith', tier: '1', highAvail: false, excluded: false,
+          avail: { Monday: [1], Tuesday: [2, 4], Wednesday: [], Thursday: [], Friday: [] },
+          lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0 },
+      ]);
+      setLog([]);
+      // Bob's real schedule: only period 1 on Monday, but periods 2 AND 4
+      // on Tuesday — a different count and different period numbers, not
+      // just a different course in the same period.
+      scheduleData = {
+        'Bob Jones': [
+          { day: 'Monday', period: 1, courseName: 'Math', section: 'M-1', room: '101' },
+          { day: 'Tuesday', period: 2, courseName: 'Science', section: 'S-1', room: '202' },
+          { day: 'Tuesday', period: 4, courseName: 'Science Lab', section: 'S-1L', room: '203' },
+        ],
+      };
+      saveScheduleToStorage();
+
+      document.getElementById('run-date').value = '2026-06-01'; // Monday
+      document.getElementById('run-date-end').value = '2026-06-02'; // Tuesday
+      renderAbsencesTable();
+      // Day one is typed exactly as Bob's real Monday: just period 1.
+      const row = document.querySelector('#absences-tbody tr');
+      row.querySelector('.abs-teacher').value = 'Bob Jones';
+      row.querySelector('.abs-period').value = '1';
+      row.querySelector('.abs-course').value = 'Math';
+      runCoverage();
+    });
+
+    const log = await page.evaluate(() => getLog()
+      .filter(e => e.absentTeacher === 'Bob Jones')
+      .map(e => ({ date: e.date, period: e.period, courseName: e.courseName })));
+
+    const monday = log.filter(e => e.date === '2026-06-01');
+    const tuesday = log.filter(e => e.date === '2026-06-02').sort((a, b) => a.period - b.period);
+
+    expect(monday).toEqual([{ date: '2026-06-01', period: 1, courseName: 'Math' }]);
+    // Tuesday picks up BOTH of Bob's real periods (2 and 4) — not period 1
+    // repeated, and not just one of them.
+    expect(tuesday).toEqual([
+      { date: '2026-06-02', period: 2, courseName: 'Science' },
+      { date: '2026-06-02', period: 4, courseName: 'Science Lab' },
+    ]);
+  });
+
+  test('a teacher with no classes at all on a later day is still marked absent (can\'t cover anyone else) even though nothing needs covering that day', async ({ page }) => {
+    await gotoApp(page);
+    page.on('dialog', d => d.accept());
+
+    await page.evaluate(() => {
+      setRoster([
+        { id: 't1', name: 'Bob Jones', tier: '1', highAvail: false, excluded: false,
+          avail: { Monday: [1], Tuesday: [3], Wednesday: [], Thursday: [], Friday: [] },
+          lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0 }, // would otherwise be the fairer pick
+        { id: 't2', name: 'Jane Smith', tier: '1', highAvail: false, excluded: false,
+          avail: { Monday: [], Tuesday: [3], Wednesday: [], Thursday: [], Friday: [] },
+          lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 5 },
+        { id: 't3', name: 'Amy Lee', tier: '1', highAvail: false, excluded: false,
+          avail: { Monday: [], Tuesday: [3], Wednesday: [], Thursday: [], Friday: [] },
+          lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0 }, // needs covering, not covering
+      ]);
+      setLog([]);
+      // Bob only has a Monday class — Tuesday he genuinely has nothing
+      // scheduled (not a missing-from-the-CSV case, a real day with zero
+      // classes), yet he's still out sick that day per the absence range.
+      scheduleData = { 'Bob Jones': [{ day: 'Monday', period: 1, courseName: 'Math', section: '', room: '' }] };
+      saveScheduleToStorage();
+
+      document.getElementById('run-date').value = '2026-06-01';
+      document.getElementById('run-date-end').value = '2026-06-02';
+      renderAbsencesTable();
+      const row = document.querySelector('#absences-tbody tr');
+      row.querySelector('.abs-teacher').value = 'Bob Jones';
+      row.querySelector('.abs-period').value = '1';
+      row.querySelector('.abs-course').value = 'Math';
+
+      // A separate, unrelated Tuesday absence that needs covering.
+      setData('cs_absences_2026-06-02', [{ teacher: 'Amy Lee', period: 3, course: 'Art', section: '', room: '', noCoverage: false, absType: 'normal' }]);
+      runCoverage();
+    });
+
+    const log = await page.evaluate(() => getLog().map(e => ({ date: e.date, absentTeacher: e.absentTeacher, period: e.period, coveringTeacher: e.coveringTeacher })));
+    // No coverage entry logged for Bob on Tuesday — he had nothing scheduled.
+    expect(log.some(e => e.date === '2026-06-02' && e.absentTeacher === 'Bob Jones')).toBe(false);
+    // Jane picks it up, not Bob, even though Bob has a better fairness
+    // score (0 vs 5 total), because Bob is correctly excluded for being
+    // out that whole day — even with zero real periods to anchor it to.
+    const amyEntry = log.find(e => e.date === '2026-06-02' && e.absentTeacher === 'Amy Lee');
+    expect(amyEntry.coveringTeacher).toBe('Jane Smith');
+  });
+
   test('a teacher not in the loaded schedule at all falls back and is flagged, not silently dropped', async ({ page }) => {
     await gotoApp(page);
     const dialogs = [];

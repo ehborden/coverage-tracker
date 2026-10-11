@@ -763,7 +763,6 @@
         <div style="display:flex;gap:6px">
           <button class="btn btn-gold btn-sm" onclick="openAddByTeacher()">+ Add by Teacher</button>
           <button class="btn btn-ghost btn-sm" onclick="addAbsenceRow()">+ Blank Row</button>
-          <button class="btn btn-ghost btn-sm" onclick="openOutAllWeek()">+ Out All Week</button>
         </div>
       </div>
 
@@ -2624,9 +2623,12 @@ function getAbsences() {
 }
 
 // ── Multi-day range ("End Date (for range)") ─────────────────────────
-// For a teacher out several days in a row: the absence rows filled in for
-// the start date get repeated across every school day through the end
-// date, run through the fairness engine separately per day.
+// For a teacher out several days in a row: day one is entered normally,
+// then for every later school day through the end date, that teacher's
+// real periods for that specific day are pulled straight from the loaded
+// Schedule (not day one's period numbers repeated forward — the same
+// person can have a totally different set of periods on different days),
+// each day run through the fairness engine separately.
 
 // School days only (Mon-Fri) from start through end, inclusive.
 function weekdayRangeInclusive(startStr, endStr) {
@@ -2685,9 +2687,9 @@ function mergeAbsencesIntoDate(d, engineAbsences) {
 }
 
 // A teacher's real scheduled class for one day+period, from the loaded
-// Schedule CSV. Same lookup Out All Week uses. Three outcomes, which
-// rowsForRangeDay treats differently:
-//   { courseName, section, room }  the real class found
+// Schedule CSV. Used to look up the absent class's own level/subject for
+// the MS/subject-match tie-break in assignCoverage. Three outcomes:
+//   { courseName, section, room, level, subject }  the real class found
 //   'free'                          teacher IS in the loaded schedule, but
 //                                    genuinely has nothing that period — a
 //                                    real free period, no coverage needed
@@ -2734,26 +2736,45 @@ function teacherSubjects(teacherName) {
   return new Set(classes.map(c => c.subject).filter(Boolean));
 }
 
-// For a later day in a range run: re-derives each row's course/section/room
-// from that day's real schedule instead of blindly repeating day one's
-// values, since the same teacher can teach a different class in the same
-// period on a different day. A day the schedule confirms is genuinely free
-// is turned into a 'skip' row rather than dropped outright — no class
-// means no coverage is needed there, but the teacher is still absent that
-// day and must stay excluded from covering anyone else (assignCoverage
-// treats 'skip' as "absent, nothing to assign"). Only falls back to
-// copying day one's values (flagged) when the schedule has no data for
-// that teacher at all, so a free period can't be told apart from a class
-// that's simply missing from what's loaded.
+// For a later day in a range run: pulls each absent teacher's actual
+// periods for that specific day straight from the loaded Schedule — not
+// day one's period numbers repeated forward, since the same teacher can
+// easily have a completely different set of periods on a different day
+// (this is what Out All Week used to do separately; it's now just what
+// a range run does automatically). Only rows typed as a normal absence
+// drive this per teacher — 'tardy'/'outside'/'skip' rows are day-one-only
+// declarations and aren't carried forward as a schedule lookup.
+// A day with real schedule data for them but zero classes that day is a
+// genuine day off: still absent (so they stay excluded from covering
+// anyone else that day), hence a single 'skip' row even though there's
+// no actual period to anchor it to. Only falls back to copying day one's
+// own row(s) (flagged) when the Schedule has no data for that teacher at
+// all, so a real day off can't be confused with a teacher who's simply
+// missing from what's loaded.
 function rowsForRangeDay(baseAbsences, dayName) {
   const unmatched = [];
   const rows = [];
-  baseAbsences.forEach(a => {
-    const real = scheduledClassFor(a.absentTeacher, dayName, a.period);
-    if (real === 'free') { rows.push({ ...a, absType: 'skip' }); return; }
-    if (real) { rows.push({ ...a, courseName: real.courseName, sectionNumber: real.section, roomNumber: real.room }); return; }
-    unmatched.push({ absentTeacher: a.absentTeacher, period: a.period });
-    rows.push({ ...a });
+  const teachers = [...new Set(
+    baseAbsences.filter(a => !a.absType || a.absType === 'normal').map(a => a.absentTeacher)
+  )];
+  teachers.forEach(teacher => {
+    const classes = scheduleData[teacher];
+    if (!classes) {
+      baseAbsences.filter(a => a.absentTeacher === teacher).forEach(a => {
+        unmatched.push({ absentTeacher: teacher, period: a.period });
+        rows.push({ ...a });
+      });
+      return;
+    }
+    const dayClasses = classes.filter(c => c.day === dayName);
+    if (dayClasses.length === 0) {
+      const sample = baseAbsences.find(a => a.absentTeacher === teacher);
+      rows.push({ absentTeacher: teacher, period: sample.period, courseName: '', sectionNumber: '', roomNumber: '', absType: 'skip' });
+      return;
+    }
+    dayClasses.forEach(c => {
+      rows.push({ absentTeacher: teacher, period: c.period, courseName: c.courseName, sectionNumber: c.section, roomNumber: c.room, absType: 'normal' });
+    });
   });
   return { rows, unmatched };
 }
@@ -3104,10 +3125,10 @@ async function runCoverage() {
   const unmatchedByDate = []; // rows on a later day with no scheduled match, copied from day one instead
   for (let i = 0; i < dateList.length; i++) {
     const d = dateList[i];
-    // Day 1 uses the rows exactly as entered. Later days re-derive each
-    // row's course/section/room from that day's own real schedule (a
-    // teacher can teach something different in the same period on a
-    // different day), merged into whatever `d` already has on its own so
+    // Day 1 uses the rows exactly as entered. Later days pull each
+    // absent teacher's real periods for that specific day from the
+    // schedule — not day one's period numbers (they can be completely
+    // different) — merged into whatever `d` already has on its own so
     // an absence entered separately for that day isn't lost.
     let dayAbsences;
     if (i === 0) {
@@ -3402,112 +3423,10 @@ function renderOutput(assignments, unassigned, conflicts, dateStr, lockedCount, 
   }
 }
 
-// ═══════════════════════════════════════════════════════
-//  OUT ALL WEEK
-// ═══════════════════════════════════════════════════════
-
-function getWeekDatesFromDate(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00');
-  const dow = d.getDay();
-  const monday = new Date(d);
-  monday.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
-  const dates = [];
-  const dayNames = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
-  for (let i = 0; i < 5; i++) {
-    const day = new Date(monday);
-    day.setDate(monday.getDate() + i);
-    dates.push({ dateStr: toLocalDateStr(day), dayName: dayNames[i] });
-  }
-  return dates;
-}
-
-function openOutAllWeek() {
-  const dateStr = document.getElementById('run-date').value;
-  if (!dateStr) { alert('Please select a date first.'); return; }
-  const names = getAllTeacherNames();
-  const weekDates = getWeekDatesFromDate(dateStr);
-
-  // Build modal
-  let modal = document.getElementById('out-all-week-modal');
-  if (modal) modal.remove();
-
-  modal = document.createElement('div');
-  modal.id = 'out-all-week-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;display:flex;align-items:center;justify-content:center;';
-  modal.innerHTML = `
-    <div style="background:white;border-radius:12px;padding:28px;width:420px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,0.2)">
-      <div style="font-family:'DM Serif Display',serif;font-size:18px;color:var(--navy-dark);margin-bottom:4px">Out All Week</div>
-      <div style="font-size:12px;color:var(--gray-400);margin-bottom:20px">Adds this teacher's classes to each day they have them</div>
-      <div style="margin-bottom:16px">
-        <label style="font-size:12px;font-weight:600;color:var(--gray-600);display:block;margin-bottom:6px">Teacher</label>
-        <select id="oaw-teacher" style="width:100%;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:13px">
-          <option value="">Select teacher...</option>
-          ${names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}
-        </select>
-      </div>
-      <div style="margin-bottom:20px">
-        <label style="font-size:12px;font-weight:600;color:var(--gray-600);display:block;margin-bottom:8px">Days to include</label>
-        <div style="display:flex;flex-direction:column;gap:6px" id="oaw-days">
-          ${weekDates.map(d => `
-            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-              <input type="checkbox" class="oaw-day-check" data-date="${d.dateStr}" checked style="width:15px;height:15px" />
-              ${d.dayName} <span style="color:var(--gray-400);font-size:11px">${new Date(d.dateStr + 'T00:00:00').toLocaleDateString('en-US',{month:'numeric',day:'numeric'})}</span>
-            </label>`).join('')}
-        </div>
-      </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('out-all-week-modal').remove()">Cancel</button>
-        <button class="btn btn-gold btn-sm" onclick="confirmOutAllWeek()">Add to Selected Days</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-}
-
-function confirmOutAllWeek() {
-  const teacher = document.getElementById('oaw-teacher').value;
-  if (!teacher) { alert('Please select a teacher.'); return; }
-
-  const checkedDays = document.querySelectorAll('.oaw-day-check:checked');
-  if (checkedDays.length === 0) { alert('Please select at least one day.'); return; }
-
-  const currentDate = document.getElementById('run-date').value;
-
-  checkedDays.forEach(dayEl => {
-    const dateStr = dayEl.dataset.date;
-    const d = new Date(dateStr + 'T00:00:00');
-    const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-    const dayName = dayNames[d.getDay()];
-
-    // Get teacher's classes for this day from schedule
-    const teacherClasses = scheduleData[teacher] || [];
-    const dayClasses = teacherClasses.filter(c => c.day === dayName);
-
-    if (dayClasses.length === 0) return; // no classes this day, skip
-
-    // Save current absences first if switching days
-    if (dateStr !== currentDate) {
-      saveAbsencesForDate(currentDate);
-    }
-
-    // Load existing absences for this date, add new ones, save
-    const existing = getAbsencesByDate(dateStr);
-    dayClasses.forEach(c => {
-      // avoid duplicates
-      const alreadyExists = existing.some(a => a.teacher === teacher && a.period === c.period);
-      if (!alreadyExists) {
-        const liveRoom = getRoomFromChart(c.section, c.day, c.period) || c.room;
-        existing.push({ teacher, period: c.period, course: c.courseName, section: c.section, room: liveRoom, noCoverage: false });
-      }
-    });
-    setData('cs_absences_' + dateStr, existing);
-  });
-
-  // Reload current date display
-  loadAbsencesForDate(currentDate);
-  document.getElementById('out-all-week-modal').remove();
-  showImportAlert('success', `${teacher} added to selected days.`);
-}
+// Out All Week used to live here as its own separate button/modal. Its
+// "pull this teacher's real periods for each day from the schedule" logic
+// is now just what End Date (for range) does automatically — see
+// rowsForRangeDay above — so there's no longer a separate flow for it.
 
 function saveSubPlanNote(el) {
   const dateStr = el.dataset.noteDate;
