@@ -728,7 +728,7 @@
         </div>
         <div>
           <label for="outside-sub-count">Outside Subs Coming</label>
-          <select id="outside-sub-count">
+          <select id="outside-sub-count" onchange="renderOutsideSubAvail()">
             <option value="0">0</option>
             <option value="1">1</option>
             <option value="2">2</option>
@@ -743,6 +743,7 @@
           </label>
         </div>
       </div>
+      <div id="outside-sub-avail-area"></div>
 
       <!-- Absences table -->
       <div class="flex-between mt-16" style="margin-bottom:10px">
@@ -1491,6 +1492,16 @@ function outsideSubLabelsForCount(count) {
   return labels;
 }
 
+// Periods a given date's outside sub(s) can't cover, keyed by the exact
+// label outsideSubLabelsForCount produces for that slot, e.g.
+// { "Outside Sub": [7] } or { "Outside Sub 1": [7], "Outside Sub 2": [] }.
+function getOutsideSubUnavail(dateStr) {
+  return getData('cs_outsidesub_unavail_' + dateStr, {});
+}
+function setOutsideSubUnavail(dateStr, unavail) {
+  setData('cs_outsidesub_unavail_' + dateStr, unavail);
+}
+
 // ── Roster ───────────────────────────────────────────
 
 function getRoster() {
@@ -2137,6 +2148,7 @@ function buildDailyBlob() {
     absences: payload.absences,
     notes: payload.notes,
     outsideSubCounts: payload.outsideSubCounts,
+    outsideSubUnavail: payload.outsideSubUnavail,
     seniorClassesEnded: payload.seniorClassesEnded,
     emailTemplate: payload.emailTemplate,
   };
@@ -2146,6 +2158,7 @@ function applyDailyBlob(data) {
   Object.entries(data.absences || {}).forEach(([date, abs]) => setData('cs_absences_' + date, abs));
   Object.entries(data.notes || {}).forEach(([date, notes]) => localStorage.setItem('cs_notes_' + date, JSON.stringify(notes)));
   Object.entries(data.outsideSubCounts || {}).forEach(([date, count]) => setData('cs_outsidesubcount_' + date, count));
+  Object.entries(data.outsideSubUnavail || {}).forEach(([date, unavail]) => setOutsideSubUnavail(date, unavail));
   if (data.seniorClassesEnded !== undefined) localStorage.setItem('cs_senior_ended', data.seniorClassesEnded);
   if (data.emailTemplate !== undefined) localStorage.setItem('cs_email_template', data.emailTemplate);
   loadSeniorClassesFlag();
@@ -2489,6 +2502,7 @@ function onDateChange() {
   // Restore outside sub count for new date
   const saved = getData('cs_outsidesubcount_' + newDate, null);
   document.getElementById('outside-sub-count').value = saved !== null ? saved : 0;
+  renderOutsideSubAvail();
 }
 
 function renderAbsencesTable() {
@@ -2498,6 +2512,45 @@ function renderAbsencesTable() {
   // Restore outside sub count for initial date
   const saved = getData('cs_outsidesubcount_' + dateStr, null);
   document.getElementById('outside-sub-count').value = saved !== null ? saved : 0;
+  renderOutsideSubAvail();
+}
+
+// Shows one row per outside sub actually configured for this date, each
+// with checkboxes for the periods that one can't cover. Empty/hidden
+// entirely on a day with no outside subs coming.
+function renderOutsideSubAvail() {
+  const area = document.getElementById('outside-sub-avail-area');
+  if (!area) return;
+  const dateStr = document.getElementById('run-date').value;
+  const count = parseInt(document.getElementById('outside-sub-count').value) || 0;
+  if (count <= 0 || !dateStr) { area.innerHTML = ''; return; }
+
+  const labels = outsideSubLabelsForCount(count);
+  const unavail = getOutsideSubUnavail(dateStr);
+  area.innerHTML = labels.map(label => {
+    const excluded = new Set(unavail[label] || []);
+    const boxes = PERIODS.map(p => `
+      <label style="display:inline-flex;align-items:center;gap:3px;margin:0 10px 0 0;font-size:12px;font-weight:400;text-transform:none;letter-spacing:normal;cursor:pointer">
+        <input type="checkbox" class="outside-sub-avail-box" data-label="${esc(label)}" data-period="${p}" ${excluded.has(p) ? 'checked' : ''} onchange="saveOutsideSubAvail()" style="width:auto" />
+        P${p}
+      </label>`).join('');
+    return `<div style="margin-top:6px;display:flex;align-items:center;flex-wrap:wrap">
+      <span style="font-size:12px;font-weight:600;color:var(--gray-600);margin-right:10px;white-space:nowrap">${esc(label)} can't cover:</span>${boxes}
+    </div>`;
+  }).join('');
+}
+
+function saveOutsideSubAvail() {
+  const dateStr = document.getElementById('run-date').value;
+  if (!dateStr) return;
+  const unavail = {};
+  document.querySelectorAll('.outside-sub-avail-box:checked').forEach(box => {
+    const label = box.dataset.label;
+    const period = parseInt(box.dataset.period);
+    if (!unavail[label]) unavail[label] = [];
+    unavail[label].push(period);
+  });
+  setOutsideSubUnavail(dateStr, unavail);
 }
 
 function addAbsenceRow() {
@@ -2794,23 +2847,9 @@ function assignCoverage(absences, dateStr, outsideSubCount) {
       ).length;
       periodCounts[p] = (periodCounts[p] || 0) + cnt;
     });
-    const sortedPeriods = [...new Set(coverableAbsences.map(a => a.period))].sort((a,b) => (periodCounts[a]||0) - (periodCounts[b]||0));
     const unlockedAbsences = coverableAbsences.filter(ab => !lockedKeys.has(`${ab.absentTeacher}||${ab.period}`));
-    unlockedAbsences.filter(ab => ab.absType === 'outside').forEach(ab => {
-      outsideSubPeriodMap[`${ab.absentTeacher}||${ab.period}`] = outsideSubCount > 1 ? 'Outside Sub 1' : 'Outside Sub';
-    });
-    // MS detection: section ID starts with 6, 7, 8, or contains 6/7
-    const isMS = (ab) => {
-      const sec = (ab.sectionNumber || '').trim();
-      return /^[678][-\/]/i.test(sec) || /^[678]\b/.test(sec) || /6\/7/i.test(sec);
-    };
-    // Sort: hardest to cover first; within same period, HS before MS
-    const autoSorted = unlockedAbsences.filter(ab => ab.absType !== 'outside').sort((a,b) => {
-      const pa = periodCounts[a.period] || 0;
-      const pb = periodCounts[b.period] || 0;
-      if (pa !== pb) return pa - pb;
-      return (isMS(a) ? 1 : 0) - (isMS(b) ? 1 : 0); // HS first, MS last
-    });
+
+    const subLabels = outsideSubLabelsForCount(outsideSubCount);
     const subUsage = {};
     for (let i = 0; i < outsideSubCount; i++) subUsage[i] = new Set();
     // Pre-populate from existing outside sub assignments that will survive this re-run
@@ -2827,16 +2866,55 @@ function assignCoverage(absences, dateStr, outsideSubCount) {
       const subIdx = match[1] ? parseInt(match[1]) - 1 : 0;
       if (subUsage[subIdx]) subUsage[subIdx].add(e.period);
     });
+
+    // Periods a given outside sub can't cover today (e.g. "can do anything
+    // but last period"), set on Run Coverage next to Outside Subs Coming.
+    const unavail = getOutsideSubUnavail(dateStr);
+    const slotExcluded = (i, period) => (unavail[subLabels[i]] || []).includes(period);
+    // First free, non-excluded slot for a period, or -1 if none qualify —
+    // shared by both assignment passes below so "already used this period"
+    // and "excluded from this period" mean the same thing in both places.
+    const pickSlotFor = (period) => {
+      for (let i = 0; i < outsideSubCount; i++) {
+        if (subUsage[i].has(period)) continue;
+        if (slotExcluded(i, period)) continue;
+        return i;
+      }
+      return -1;
+    };
+
+    // Rows explicitly marked "Outside Sub" on the Run Coverage screen — a
+    // direct human choice, so these always go first and never get pushed
+    // toward MS avoidance below, only around an excluded or already-used slot.
+    unlockedAbsences.filter(ab => ab.absType === 'outside').forEach(ab => {
+      const i = pickSlotFor(ab.period);
+      if (i < 0) return; // no qualifying slot — falls through to a real teacher below
+      outsideSubPeriodMap[`${ab.absentTeacher}||${ab.period}`] = subLabels[i];
+      subUsage[i].add(ab.period);
+    });
+
+    // MS detection: section ID starts with 6, 7, 8, or contains 6/7
+    const isMS = (ab) => {
+      const sec = (ab.sectionNumber || '').trim();
+      return /^[678][-\/]/i.test(sec) || /^[678]\b/.test(sec) || /6\/7/i.test(sec);
+    };
+    // Sort: non-MS (HS) periods first, so outside subs only land on a 6-8
+    // class when there's nothing else left for them that period; hardest
+    // to cover first within each of those two groups.
+    const autoSorted = unlockedAbsences.filter(ab => ab.absType !== 'outside').sort((a,b) => {
+      const msA = isMS(a) ? 1 : 0, msB = isMS(b) ? 1 : 0;
+      if (msA !== msB) return msA - msB;
+      const pa = periodCounts[a.period] || 0;
+      const pb = periodCounts[b.period] || 0;
+      return pa - pb;
+    });
     autoSorted.forEach(absence => {
       const k = `${absence.absentTeacher}||${absence.period}`;
       if (outsideSubPeriodMap[k]) return;
-      for (let i = 0; i < outsideSubCount; i++) {
-        if (!subUsage[i].has(absence.period)) {
-          outsideSubPeriodMap[k] = outsideSubLabelsForCount(outsideSubCount)[i];
-          subUsage[i].add(absence.period);
-          break;
-        }
-      }
+      const i = pickSlotFor(absence.period);
+      if (i < 0) return;
+      outsideSubPeriodMap[k] = subLabels[i];
+      subUsage[i].add(absence.period);
     });
   }
 
@@ -4925,7 +5003,7 @@ function startNewYear() {
 
   const label = schoolYearLabelFromLog(log);
   const roster = getRoster();
-  const dated = ['cs_absences_', 'cs_notes_', 'cs_outsidesubcount_'];
+  const dated = ['cs_absences_', 'cs_notes_', 'cs_outsidesubcount_', 'cs_outsidesub_unavail_'];
   let datedCount = 0;
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
@@ -5261,6 +5339,10 @@ async function applyBackupPayload(payload) {
       Object.entries(payload.outsideSubCounts || {}).forEach(([date, count]) => {
         setData('cs_outsidesubcount_' + date, count);
       });
+      // Restore outside-sub period exclusions
+      Object.entries(payload.outsideSubUnavail || {}).forEach(([date, unavail]) => {
+        setOutsideSubUnavail(date, unavail);
+      });
       touchBlob('schedule');
       touchBlob('roomchart');
       markDirty('daily');
@@ -5342,6 +5424,16 @@ function buildBackupPayload() {
     }
   }
 
+  // Collect per-date outside-sub period exclusions
+  const outsideSubUnavail = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('cs_outsidesub_unavail_')) {
+      const dateStr = key.replace('cs_outsidesub_unavail_', '');
+      try { outsideSubUnavail[dateStr] = JSON.parse(localStorage.getItem(key)); } catch {}
+    }
+  }
+
   return {
     exportedAt: new Date().toISOString(),
     exportedFrom: window.location.href,
@@ -5355,6 +5447,7 @@ function buildBackupPayload() {
     absences,
     notes,
     outsideSubCounts,
+    outsideSubUnavail,
   };
 }
 
