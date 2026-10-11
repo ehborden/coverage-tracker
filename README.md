@@ -44,12 +44,12 @@ The same applies to Start New Year (below): running it on one computer does not 
 
 ## Syncing to GitHub (optional)
 
-Data menu → **Sync with GitHub** connects this computer to a private GitHub repo. Every other computer that connects to the *same* repo sees the same roster, log, schedule, room chart, and day-to-day entries, without anyone exporting or importing a file by hand.
+Data menu → **Connect with GitHub** connects this computer to a private GitHub repo. Every other computer that connects to the *same* repo sees the same roster, log, schedule, room chart, and day-to-day entries, without anyone exporting or importing a file by hand.
 
 **Setting it up:**
 1. Create a private repo on GitHub to hold the data (any name; `coverage-tracker-data` is the suggested default). It must be private, since this is school data, your coverage schedule, and the app refuses to connect to a public one.
 2. Create a [personal access token](https://github.com/settings/tokens) scoped to just that one repo, with Contents set to **Read and write**.
-3. Data menu → Sync with GitHub → enter your GitHub username, the repo name, and the token. Repeat on every computer you want connected.
+3. Data menu → Connect with GitHub → enter your GitHub username, the repo name, and the token. Repeat on every computer you want connected.
 
 The token is saved only in that browser's `localStorage`. It's never written into the HTML file and never included in a Backup. Each computer needs its own token entered once.
 
@@ -59,7 +59,7 @@ The token is saved only in that browser's `localStorage`. It's never written int
 - The small pill next to Undo shows the state: **Saving...** (about to push), **Syncing...** (talking to GitHub), **Synced**, **Offline** (can't reach GitHub right now, nothing is lost, it'll catch up), or **Sync problem** (click it to check the token or repo name).
 - About once a week, the app saves a dated backup to a `backups` folder in the data repo and keeps the last 12. Data menu → **Restore from GitHub** lists them by date, the same way Restore does for a local file.
 
-Turning sync off (Sync with GitHub → Turn off sync) stops this computer from syncing; its data stays exactly where it is.
+Turning sync off (Connect with GitHub → Turn off sync) stops this computer from syncing; its data stays exactly where it is.
 
 Sync and manual Backup/Restore work together: a manual Restore still fully replaces local data as described above, and with sync on, that restored state is then pushed out to every other connected computer, the same way any other local edit would be.
 
