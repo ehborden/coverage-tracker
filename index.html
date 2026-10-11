@@ -968,8 +968,10 @@
           <label for="override-date">Date</label>
           <input type="date" id="override-date" onchange="loadOverrideEntries()" />
         </div>
-        <div style="display:flex;align-items:flex-end">
+        <div style="display:flex;align-items:flex-end;gap:8px">
           <button class="btn btn-primary" onclick="loadOverrideEntries()">Load Assignments</button>
+          <button class="btn btn-ghost btn-sm" onclick="resetAllOverride(document.getElementById('override-date').value)" title="Clear every assignment on this date, keep the absence rows">↺ Reset All</button>
+          <button class="btn btn-danger btn-sm" onclick="removeAllOverride(document.getElementById('override-date').value)" title="Remove every assignment on this date entirely, including the absence rows">✕ Remove All</button>
         </div>
       </div>
       <div id="override-entries" style="margin-top:16px"></div>
@@ -1726,7 +1728,14 @@ function showScreen(name) {
   if (name === 'roster') renderRoster();
   if (name === 'log') renderLog();
   if (name === 'summary') { renderSummary(); renderWeeklyGrid(); }
-  if (name === 'override') { document.getElementById('override-date').value = todayStr(); loadOverrideEntries(); }
+  if (name === 'override') {
+    // Follow whatever date is selected on Run Coverage, so jumping to
+    // Override from a day you're actively working on lands on that day
+    // instead of silently snapping back to today.
+    const runDate = document.getElementById('run-date')?.value;
+    document.getElementById('override-date').value = runDate || todayStr();
+    loadOverrideEntries();
+  }
   if (name === 'schedule') renderScheduleInspector();
   if (name === 'roomchart') renderRoomChartInspector();
 }
@@ -2875,9 +2884,12 @@ function assignCoverage(absences, dateStr, outsideSubCount) {
     return absentTeachers.has(ct) && !isOutsideSub(e.coveringTeacher);
   });
   const conflictKeys = new Set(conflicts.map(e => `${e.absentTeacher}||${e.period}`));
-  // Outside sub assignments are soft (re-assignable on re-run) unless manualOverride:true
+  // Outside sub assignments are soft (re-assignable on re-run) unless manualOverride:true.
+  // An UNASSIGNED entry (from Override's Reset) is also never locked — the whole point
+  // of Reset is to give the next run another shot at it, not freeze it as UNASSIGNED forever.
   const lockedExisting = existing.filter(e => {
     if (conflictKeys.has(`${e.absentTeacher}||${e.period}`)) return false;
+    if (isUnassigned(e.coveringTeacher)) return false;
     const entryIsOutsideSub = isOutsideSub(e.coveringTeacher);
     if (entryIsOutsideSub && !e.manualOverride) return false; // soft — re-run can reassign
     return true;
@@ -3194,26 +3206,36 @@ async function runCoverage() {
 
     const { assignments, newEntries, unassigned, conflicts, lockedCount } = assignCoverage(dayAbsences, d, outsideSubCount);
 
-    // Update log (skip duplicates)
+    // Update log: a genuinely new absence gets appended, but a key that's
+    // already there (most commonly a stale UNASSIGNED row left by Override's
+    // Reset) gets overwritten in place instead of silently skipped as a
+    // "duplicate" — otherwise a reset slot can never actually get reassigned.
     const log = getLog();
-    const existingKeys = new Set(log.filter(e => e.date === d).map(e => `${e.absentTeacher}||${e.period}`));
     const toAppend = [];
+    const toUpdate = [];
     newEntries.forEach(entry => {
-      const key = `${entry.absentTeacher}||${entry.period}`;
-      if (!existingKeys.has(key)) {
+      const existingEntry = log.find(e => e.date === d && e.absentTeacher === entry.absentTeacher && e.period === entry.period);
+      if (existingEntry) {
+        Object.assign(existingEntry, entry, { date: d });
+        toUpdate.push(existingEntry);
+      } else {
         const newEntry = { date: d, ...entry };
         log.push(newEntry);
         toAppend.push(newEntry);
-        existingKeys.add(key);
       }
     });
     setLog(log);
-    if (STORAGE_MODE === 'sharepoint') await appendLogEntriesSP(toAppend);
+    if (STORAGE_MODE === 'sharepoint') {
+      await appendLogEntriesSP(toAppend);
+      for (const e of toUpdate) await updateLogEntrySP(e);
+    }
 
-    // Update roster - only for genuinely new log entries. Awaited and run
-    // one day at a time so each day's weekly-fairness lookup sees the
-    // previous days' assignments in this same range.
-    await updateRosterAfterRun(toAppend, d);
+    // Update roster - for genuinely new log entries and ones that just got
+    // reassigned out of UNASSIGNED (both represent a teacher newly credited
+    // for this date). Awaited and run one day at a time so each day's
+    // weekly-fairness lookup sees the previous days' assignments in this
+    // same range.
+    await updateRosterAfterRun([...toAppend, ...toUpdate], d);
 
     if (STORAGE_MODE === 'sharepoint') {
       const absenceRows = getAbsencesByDate(d);
@@ -4364,6 +4386,65 @@ function removeOverride(idx, dateStr) {
   removeCoverageEntry(dateStr, entry.absentTeacher, entry.period);
 
   const remainingAbsences = getAbsencesByDate(dateStr).filter(a => !(a.teacher === entry.absentTeacher && a.period === entry.period));
+  setData('cs_absences_' + dateStr, remainingAbsences);
+
+  _overrideEntries = getLog().filter(e => e.date === dateStr);
+  renderOverrideTable();
+  if (dateStr === currentAbsenceDate) renderAbsencesTable();
+  refreshOutputIfShowingDate(dateStr);
+}
+
+// Same as resetOverride, applied to every entry on the date at once —
+// one confirm and one undo snapshot instead of clicking Reset N times.
+function resetAllOverride(dateStr) {
+  if (!dateStr) { alert('Please select a date.'); return; }
+  if (_overrideEntries.length === 0) { alert('Nothing to reset on this date.'); return; }
+  const n = _overrideEntries.length;
+  if (!confirm(`Reset all ${n} assignment${n !== 1 ? 's' : ''} on ${dateStr}? Each will show as UNASSIGNED; absence rows are kept.`)) return;
+  pushUndoSnapshot(`Reset all assignments (${dateStr})`);
+
+  [..._overrideEntries].forEach(entry => {
+    const oldTeacher = entry.coveringTeacher.replace(' (Emergency)', '').trim();
+    const roster = getRoster();
+    const log = getLog();
+
+    const logEntry = log.find(e => e.date === dateStr && e.absentTeacher === entry.absentTeacher && e.period === entry.period);
+    if (logEntry) logEntry.coveringTeacher = '⚠ UNASSIGNED';
+    setLog(log);
+
+    const oldT = roster.find(t => t.name === oldTeacher);
+    if (oldT && !isSpecialLabel(oldTeacher)) {
+      const stillCoveringToday = log.some(e => e.date === dateStr &&
+        !isSpecialLabel(e.coveringTeacher) &&
+        e.coveringTeacher.replace(' (Emergency)', '').trim() === oldTeacher);
+      if (!stillCoveringToday) {
+        oldT.totalCoverages = Math.max(0, (oldT.totalCoverages || 0) - 1);
+        const prior = log.filter(e => e.coveringTeacher?.replace(' (Emergency)', '').trim() === oldTeacher && e.date !== dateStr).map(e => e.date).sort();
+        oldT.lastCoverageDate = prior.length > 0 ? prior[prior.length - 1] : (oldT.previousCoverageDate || '');
+      }
+    }
+    setRoster(roster);
+  });
+
+  _overrideEntries = getLog().filter(e => e.date === dateStr);
+  renderOverrideTable();
+  refreshOutputIfShowingDate(dateStr);
+}
+
+// Same as removeOverride, applied to every entry on the date at once —
+// one confirm and one undo snapshot instead of clicking Remove N times.
+function removeAllOverride(dateStr) {
+  if (!dateStr) { alert('Please select a date.'); return; }
+  if (_overrideEntries.length === 0) { alert('Nothing to remove on this date.'); return; }
+  const n = _overrideEntries.length;
+  if (!confirm(`Remove all ${n} assignment${n !== 1 ? 's' : ''} on ${dateStr} entirely? Their absence rows will be cleared too, so they won't get reassigned on a future run.`)) return;
+  pushUndoSnapshot(`Remove all assignments (${dateStr})`);
+
+  const entries = [..._overrideEntries];
+  entries.forEach(entry => removeCoverageEntry(dateStr, entry.absentTeacher, entry.period));
+
+  const removedKeys = new Set(entries.map(e => `${e.absentTeacher}||${e.period}`));
+  const remainingAbsences = getAbsencesByDate(dateStr).filter(a => !removedKeys.has(`${a.teacher}||${a.period}`));
   setData('cs_absences_' + dateStr, remainingAbsences);
 
   _overrideEntries = getLog().filter(e => e.date === dateStr);
