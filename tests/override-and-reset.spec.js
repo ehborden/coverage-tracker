@@ -278,4 +278,59 @@ test.describe('Override and Reset Day', () => {
     const entriesText = await page.evaluate(() => document.getElementById('override-entries').textContent);
     expect(entriesText).toContain('Jane Smith');
   });
+
+  test('the "Override To" dropdown only offers the outside-sub slots this date is actually configured for', async ({ page }) => {
+    await gotoApp(page);
+    page.on('dialog', d => d.accept());
+
+    const optionsFor = async (subCount) => page.evaluate((subCount) => {
+      setRoster([{ id: 't1', name: 'Jane Smith', tier: '1', highAvail: false, excluded: false,
+        avail: { Monday: [1], Tuesday: [], Wednesday: [], Thursday: [], Friday: [] },
+        lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0 }]);
+      setLog([{ date: '2026-06-01', absentTeacher: 'X', period: 1, courseName: 'Math', coveringTeacher: 'Jane Smith' }]);
+      setData('cs_outsidesubcount_2026-06-01', subCount);
+      document.getElementById('override-date').value = '2026-06-01';
+      loadOverrideEntries();
+      const sel = document.getElementById('override-new-0');
+      return [...sel.querySelectorAll('option')].map(o => o.value).filter(v => v.toLowerCase().includes('outside'));
+    }, subCount);
+
+    expect(await optionsFor(0)).toEqual([]);
+    expect(await optionsFor(1)).toEqual(['Outside Sub']);
+    expect(await optionsFor(2)).toEqual(['Outside Sub 1', 'Outside Sub 2']);
+    expect(await optionsFor(3)).toEqual(['Outside Sub 1', 'Outside Sub 2', 'Outside Sub 3']);
+  });
+
+  test('a period can be moved to an outside sub and back via Override, with coverage credit handled correctly both ways', async ({ page }) => {
+    await gotoApp(page);
+    page.on('dialog', d => d.accept());
+
+    await page.evaluate(() => {
+      setRoster([{ id: 't1', name: 'Jane Smith', tier: '1', highAvail: false, excluded: false,
+        avail: { Monday: [1], Tuesday: [], Wednesday: [], Thursday: [], Friday: [] },
+        lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 1 }]);
+      setLog([{ date: '2026-06-01', absentTeacher: 'X', period: 1, courseName: 'Math', coveringTeacher: 'Jane Smith' }]);
+      setData('cs_outsidesubcount_2026-06-01', 1);
+      document.getElementById('override-date').value = '2026-06-01';
+      loadOverrideEntries();
+      document.getElementById('override-new-0').value = 'Outside Sub';
+      applyOverride(0, '2026-06-01');
+    });
+
+    expect(await page.evaluate(() => getLog()[0].coveringTeacher)).toBe('Outside Sub');
+    // Jane is no longer credited for a period an outside sub is covering.
+    expect(await page.evaluate(() => getRoster().find(t => t.name === 'Jane Smith').totalCoverages)).toBe(0);
+
+    // And back to a real teacher.
+    await page.evaluate(() => {
+      loadOverrideEntries();
+      const sel = document.getElementById('override-new-0');
+      sel.innerHTML += '<option value="Jane Smith">Jane Smith</option>';
+      sel.value = 'Jane Smith';
+      applyOverride(0, '2026-06-01');
+    });
+
+    expect(await page.evaluate(() => getLog()[0].coveringTeacher)).toBe('Jane Smith');
+    expect(await page.evaluate(() => getRoster().find(t => t.name === 'Jane Smith').totalCoverages)).toBe(1);
+  });
 });
