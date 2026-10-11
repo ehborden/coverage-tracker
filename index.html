@@ -3327,14 +3327,14 @@ function renderOutput(assignments, unassigned, conflicts, dateStr, lockedCount, 
     outputDoc.appendChild(tNote);
 
     periods.sort(function(a,b){ return a.period - b.period; }).forEach(function(a) {
-      var room = a.roomNumber ? ', Room ' + a.roomNumber.replace(/^Room\s*/i, '').trim() : '';
-      var section = a.sectionNumber ? ', ' + a.sectionNumber : '';
+      var room = a.roomNumber ? ', Room ' + esc(a.roomNumber.replace(/^Room\s*/i, '').trim()) : '';
+      var section = a.sectionNumber ? ', ' + esc(a.sectionNumber) : '';
       var unassigned = isUnassigned(a.coveringTeacher);
 
       var periodDiv = document.createElement('div');
       periodDiv.style.cssText = 'padding:4px 0;font-size:11px;margin-top:8px;' + (unassigned ? 'color:red;' : '');
       var reasonAttr = a.assignReason ? ` class="assign-reason" data-reason="${esc(a.assignReason)}"` : '';
-      periodDiv.innerHTML = '<strong>Period ' + a.period + ':</strong> ' + a.courseName + section + room + ' - <strong><span' + reasonAttr + '>' + a.coveringTeacher + '</span></strong>';
+      periodDiv.innerHTML = '<strong>Period ' + a.period + ':</strong> ' + esc(a.courseName) + section + room + ' - <strong><span' + reasonAttr + '>' + esc(a.coveringTeacher) + '</span></strong>';
       outputDoc.appendChild(periodDiv);
 
       var periodKey = 'period_' + teacher.replace(/[^a-z0-9]/gi, '_') + '_' + a.period;
@@ -3382,12 +3382,12 @@ function renderOutput(assignments, unassigned, conflicts, dateStr, lockedCount, 
       outputDoc.appendChild(sp);
 
       periods.sort(function(a,b){ return a.period - b.period; }).forEach(function(a) {
-        var room = a.roomNumber ? ', Room ' + a.roomNumber.replace(/^Room\s*/i, '').trim() : '';
-        var section = a.sectionNumber ? ', ' + a.sectionNumber : '';
+        var room = a.roomNumber ? ', Room ' + esc(a.roomNumber.replace(/^Room\s*/i, '').trim()) : '';
+        var section = a.sectionNumber ? ', ' + esc(a.sectionNumber) : '';
 
         var periodDiv = document.createElement('div');
         periodDiv.style.cssText = 'padding:4px 0;font-size:11px;margin-top:8px;';
-        periodDiv.innerHTML = '<strong>Period ' + a.period + ':</strong> ' + a.courseName + section + room + ' (for ' + a.absentTeacher + ')';
+        periodDiv.innerHTML = '<strong>Period ' + a.period + ':</strong> ' + esc(a.courseName) + section + room + ' (for ' + esc(a.absentTeacher) + ')';
         outputDoc.appendChild(periodDiv);
 
         var periodKey = 'outsub_' + label.replace(/\s/g,'_') + '_period_' + a.period + '_' + a.absentTeacher.replace(/[^a-z0-9]/gi,'_');
@@ -4135,8 +4135,18 @@ function renderOverrideTable() {
 
     // Outside Sub options — only the ones this date is actually configured
     // for (the Outside Subs Coming count on Run Coverage), not a fixed two.
+    // A sub excluded from this exact period (via the checkboxes next to
+    // Outside Subs Coming) shows up disabled rather than just missing, so
+    // it's clear why it's not pickable instead of looking like it was
+    // never an option — and disabled means it really can't be picked here,
+    // not just discouraged, so the exclusion can't be silently overridden
+    // from this dropdown the way it used to be.
     const subCount = getData('cs_outsidesubcount_' + dateStr, 0);
-    let opts = outsideSubLabelsForCount(subCount).map(label => `<option value="${esc(label)}">${esc(label)}</option>`).join('');
+    const subUnavail = getOutsideSubUnavail(dateStr);
+    let opts = outsideSubLabelsForCount(subCount).map(label => {
+      const excluded = (subUnavail[label] || []).includes(period);
+      return `<option value="${esc(label)}" ${excluded ? 'disabled style="color:var(--gray-400)"' : ''}>${esc(label)}${excluded ? ' — excluded this period' : ''}</option>`;
+    }).join('');
 
     if (available.length) {
       opts += `<optgroup label="Available Period ${period}">`;
