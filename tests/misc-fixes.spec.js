@@ -90,6 +90,24 @@ test.describe('Misc regression fixes', () => {
     expect(scheduledRoom).toBe('420');
   });
 
+  test('Room Chart matching falls back to a stripped class id when the Schedule side has an extra session/group suffix', async ({ page }) => {
+    await gotoApp(page);
+    page.on('dialog', d => d.accept());
+
+    // Real-world shape: the Schedule export tags the pull-out section
+    // "MTH 8-1.G1.SCH", but the Room Chart export drops the ".SCH" and
+    // just writes "Mth 8-1.g1" for the same class.
+    const csv = 'CAP,,M3\n14,403,Mth 8-1.g1\n';
+    await page.evaluate((csvText) => {
+      const file = new File([csvText], 'roomchart.csv', { type: 'text/csv' });
+      loadRoomChartCSV({ target: { files: [file], value: '' } });
+    }, csv);
+    await page.waitForTimeout(200);
+
+    const room = await page.evaluate(() => getRoomFromChart('MTH 8-1.G1.SCH', 'Monday', 3));
+    expect(room).toBe('403');
+  });
+
   test('Math.random is never used in any assignment or fairness logic', async ({ page }) => {
     // Picks are driven entirely by the weighted sort in assignCoverage; the
     // only legitimate use of Math.random in the whole app is generating a

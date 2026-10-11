@@ -5613,7 +5613,19 @@ function normalizeClassId(id) {
 
 function getRoomFromChart(classId, day, period) {
   if (!classId || !day || !period) return '';
-  const classEntry = roomChartData[normalizeClassId(classId)];
+  // Some Schedule rows carry a trailing session/group qualifier (e.g.
+  // "MTH 8-1.G1.SCH") that the Room Chart export drops for the same class
+  // (e.g. "Mth 8-1.g1"). If the exact id isn't found, peel off one trailing
+  // ".XXX" segment at a time and retry, stopping at the first match so a
+  // real exact match is never overridden by an over-stripped guess.
+  let id = normalizeClassId(classId);
+  let classEntry = roomChartData[id];
+  while (!classEntry) {
+    const shorter = id.replace(/\.[A-Z0-9]+$/, '');
+    if (shorter === id) break;
+    id = shorter;
+    classEntry = roomChartData[id];
+  }
   if (!classEntry) return '';
   return classEntry[`${day}-${period}`] || '';
 }
