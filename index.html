@@ -2724,14 +2724,21 @@ function parseSubjectField(raw) {
   return { level: m[1].toUpperCase(), subject: m[2].trim() };
 }
 
-// A teacher's own level (MS or US), by majority among their real scheduled
-// classes that have one — "Advisory"/"Jump Start"/etc. don't count either
-// way. null if the Schedule has nothing for them or no Subject column.
+// A teacher's own level (MS or US), by majority among their distinct real
+// scheduled classes (sections) that have one — "Advisory"/"Jump Start"/etc.
+// don't count either way. Counted per section, not per weekly meeting: a
+// scheduleData entry exists once per period the class meets, so a class
+// that meets 5x/week and one that meets 2x/week would otherwise skew the
+// majority by meeting frequency alone, not by how many classes a teacher
+// actually teaches at each level. null if the Schedule has nothing for
+// them or no Subject column.
 function teacherLevel(teacherName) {
   const classes = scheduleData[teacherName];
   if (!classes) return null;
+  const sectionLevels = new Map(); // section -> level, first one wins
+  classes.forEach(c => { if (c.level && !sectionLevels.has(c.section)) sectionLevels.set(c.section, c.level); });
   let ms = 0, us = 0;
-  classes.forEach(c => { if (c.level === 'MS') ms++; else if (c.level === 'US') us++; });
+  sectionLevels.forEach(level => { if (level === 'MS') ms++; else if (level === 'US') us++; });
   if (ms === 0 && us === 0) return null;
   return ms >= us ? 'MS' : 'US';
 }

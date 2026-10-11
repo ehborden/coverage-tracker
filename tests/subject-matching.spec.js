@@ -69,6 +69,30 @@ test.describe('MS/subject-aware coverage picks (derived from the Schedule CSV)',
     expect(result.neverLoadedLevel).toBeNull();
   });
 
+  test('a teacher\'s own level is decided by how many distinct classes are MS vs US, not by how many times a week each one happens to meet', async ({ page }) => {
+    await gotoApp(page);
+    await page.evaluate(() => {
+      // Real-world shape: 2 MS sections that each meet twice a week, 2 US
+      // sections that each meet five times a week — same number of actual
+      // classes at each level (2 and 2), but the US side has far more
+      // individual period-meeting entries. The old per-meeting tally would
+      // call this teacher "US" (10 US meetings vs 4 MS meetings); counting
+      // by distinct class instead should call it a tie, which goes to MS.
+      const msSection = (section, day) => ({ day, period: 1, courseName: 'Spanish', section, room: '', level: 'MS', subject: 'Language' });
+      const usSection = (section, day) => ({ day, period: 2, courseName: 'Spanish', section, room: '', level: 'US', subject: 'Language' });
+      scheduleData = {
+        'Even Split Teacher': [
+          msSection('SPAN 7-2', 'Monday'), msSection('SPAN 7-2', 'Tuesday'),
+          msSection('SPAN 8-1', 'Wednesday'), msSection('SPAN 8-1', 'Thursday'),
+          usSection('SPAN 9-2', 'Monday'), usSection('SPAN 9-2', 'Tuesday'), usSection('SPAN 9-2', 'Wednesday'), usSection('SPAN 9-2', 'Thursday'), usSection('SPAN 9-2', 'Friday'),
+          usSection('SPAN 11-2', 'Monday'),
+        ],
+      };
+    });
+
+    expect(await page.evaluate(() => teacherLevel('Even Split Teacher'))).toBe('MS');
+  });
+
   test('an MS-tagged teacher is preferred for an MS class when fairness is otherwise tied, but a clearly fairer pick still wins regardless', async ({ page }) => {
     await gotoApp(page);
     page.on('dialog', d => d.accept());
