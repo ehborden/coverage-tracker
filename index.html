@@ -1703,7 +1703,7 @@ function showScreen(name) {
   if (name === 'roster') renderRoster();
   if (name === 'log') renderLog();
   if (name === 'summary') { renderSummary(); renderWeeklyGrid(); }
-  if (name === 'override') { document.getElementById('override-date').value = todayStr(); }
+  if (name === 'override') { document.getElementById('override-date').value = todayStr(); loadOverrideEntries(); }
   if (name === 'schedule') renderScheduleInspector();
   if (name === 'roomchart') renderRoomChartInspector();
 }
@@ -2519,7 +2519,7 @@ function addAbsenceRow() {
     <td>
       <div style="display:flex;gap:4px">
         <button class="btn btn-ghost btn-sm" onclick="duplicateAbsenceRow(this)" title="Duplicate row">⧉</button>
-        <button class="btn btn-danger btn-sm" onclick="this.closest('tr').remove()">✕</button>
+        <button class="btn btn-danger btn-sm" onclick="removeAbsenceRow(this)">✕</button>
       </div>
     </td>
   `;
@@ -2996,6 +2996,7 @@ async function runCoverage() {
   }
 
   renderOutput(primaryResult.assignments, primaryResult.unassigned, primaryResult.conflicts, dateStr, primaryResult.lockedCount, outsideSubCount);
+  document.getElementById('output-area').dataset.outputDate = dateStr;
   document.getElementById('output-area').style.display = 'block';
   document.getElementById('output-area').scrollIntoView({ behavior: 'smooth' });
 
@@ -3951,6 +3952,47 @@ async function confirmReset() {
   alert(`Reset complete. ${toRemove.length} assignment(s) removed for ${dateStr}.`);
 }
 
+// Removes one log entry (date+absentTeacher+period) and rolls back the
+// covering teacher's stats. Shared by Override's Remove and the Run
+// Coverage screen's absence-row delete, so "delete" rolls back coverage
+// credit the same way no matter which screen you deleted it from.
+function removeCoverageEntry(dateStr, absentTeacher, period) {
+  const log = getLog();
+  const entry = log.find(e => e.date === dateStr && e.absentTeacher === absentTeacher && e.period === period);
+  if (!entry) return false;
+  const oldTeacher = entry.coveringTeacher.replace(' (Emergency)', '').trim();
+  const newLog = log.filter(e => e !== entry);
+  setLog(newLog);
+
+  const roster = getRoster();
+  const oldT = roster.find(t => t.name === oldTeacher);
+  if (oldT && !isSpecialLabel(oldTeacher)) {
+    // "Coverage" is counted per date, not per period — only roll back the
+    // total if this was the teacher's only assignment left on this date.
+    const stillCoveringToday = newLog.some(e => e.date === dateStr &&
+      !isSpecialLabel(e.coveringTeacher) &&
+      e.coveringTeacher.replace(' (Emergency)', '').trim() === oldTeacher);
+    if (!stillCoveringToday) {
+      oldT.totalCoverages = Math.max(0, (oldT.totalCoverages || 0) - 1);
+      const prior = newLog.filter(e => e.coveringTeacher?.replace(' (Emergency)', '').trim() === oldTeacher).map(e => e.date).sort();
+      oldT.lastCoverageDate = prior.length > 0 ? prior[prior.length - 1] : (oldT.previousCoverageDate || '');
+    }
+    setRoster(roster);
+  }
+  return true;
+}
+
+// The Run Coverage output document doesn't know about edits made on the
+// Override screen (or an absence row deleted after the fact) unless told.
+// Call this after any change that might affect a date currently on screen.
+function refreshOutputIfShowingDate(dateStr) {
+  const area = document.getElementById('output-area');
+  if (!area || area.style.display === 'none' || area.dataset.outputDate !== dateStr) return;
+  const assignments = getLog().filter(e => e.date === dateStr);
+  const outsideSubCount = getData('cs_outsidesubcount_' + dateStr, 0);
+  renderOutput(assignments, [], [], dateStr, 0, outsideSubCount);
+}
+
 // ═══════════════════════════════════════════════════════
 //  OVERRIDE
 // ═══════════════════════════════════════════════════════
@@ -4136,6 +4178,7 @@ async function applyOverride(idx, dateStr) {
   setRoster(roster);
   _overrideEntries = getLog().filter(e => e.date === dateStr);
   renderOverrideTable();
+  refreshOutputIfShowingDate(dateStr);
 }
 
 // Reset: clears the covering teacher assignment but keeps the log entry (shows as UNASSIGNED)
@@ -4169,40 +4212,26 @@ function resetOverride(idx, dateStr) {
   setRoster(roster);
   _overrideEntries = getLog().filter(e => e.date === dateStr);
   renderOverrideTable();
+  refreshOutputIfShowingDate(dateStr);
 }
 
-// Remove: deletes the log entry entirely and rolls back stats
+// Remove: deletes the log entry entirely, rolls back stats, and clears the
+// matching absence row too — otherwise a later Run Coverage on this date
+// re-reads that still-there absence and reassigns the exact thing just removed.
 function removeOverride(idx, dateStr) {
-  if (!confirm('Remove this assignment entirely? The absence row will be cleared from the log.')) return;
+  if (!confirm('Remove this assignment entirely? The absence row will be cleared too, so it won\'t get reassigned on a future run.')) return;
   const entry = _overrideEntries[idx];
   pushUndoSnapshot(`Remove assignment — ${entry.absentTeacher} P${entry.period} (${dateStr})`);
-  const oldTeacher = entry.coveringTeacher.replace(' (Emergency)', '').trim();
-  const roster = getRoster();
-  let log = getLog();
 
-  // Remove from log
-  log = log.filter(e => !(e.date === dateStr && e.absentTeacher === entry.absentTeacher && e.period === entry.period));
-  setLog(log);
+  removeCoverageEntry(dateStr, entry.absentTeacher, entry.period);
 
-  // Roll back old teacher stats
-  const oldT = roster.find(t => t.name === oldTeacher);
-  if (oldT && !isSpecialLabel(oldTeacher)) {
-    // "Coverage" is counted per date, not per period — only roll back the
-    // total if this was the teacher's only assignment left on this date.
-    // (The removed entry is already filtered out of `log` above.)
-    const stillCoveringToday = log.some(e => e.date === dateStr &&
-      !isSpecialLabel(e.coveringTeacher) &&
-      e.coveringTeacher.replace(' (Emergency)', '').trim() === oldTeacher);
-    if (!stillCoveringToday) {
-      oldT.totalCoverages = Math.max(0, (oldT.totalCoverages || 0) - 1);
-      const prior = log.filter(e => e.coveringTeacher?.replace(' (Emergency)', '').trim() === oldTeacher).map(e => e.date).sort();
-      oldT.lastCoverageDate = prior.length > 0 ? prior[prior.length - 1] : (oldT.previousCoverageDate || '');
-    }
-  }
+  const remainingAbsences = getAbsencesByDate(dateStr).filter(a => !(a.teacher === entry.absentTeacher && a.period === entry.period));
+  setData('cs_absences_' + dateStr, remainingAbsences);
 
-  setRoster(roster);
   _overrideEntries = getLog().filter(e => e.date === dateStr);
   renderOverrideTable();
+  if (dateStr === currentAbsenceDate) renderAbsencesTable();
+  refreshOutputIfShowingDate(dateStr);
 }
 
 // Toggle manualOverride lock on an outside sub assignment
@@ -4214,6 +4243,7 @@ function toggleOutsideSubLock(idx, dateStr) {
   setLog(log);
   _overrideEntries = getLog().filter(e => e.date === dateStr);
   renderOverrideTable();
+  refreshOutputIfShowingDate(dateStr);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -4719,7 +4749,7 @@ function addAbsenceRowWithData(teacher, period, course, section, room, noCoverag
     <td>
       <div style="display:flex;gap:4px">
         <button class="btn btn-ghost btn-sm" onclick="duplicateAbsenceRow(this)" title="Duplicate row">⧉</button>
-        <button class="btn btn-danger btn-sm" onclick="this.closest('tr').remove()">✕</button>
+        <button class="btn btn-danger btn-sm" onclick="removeAbsenceRow(this)">✕</button>
       </div>
     </td>
   `;
@@ -4743,9 +4773,36 @@ function duplicateAbsenceRow(btn) {
   sel.addEventListener('change', () => {
     custom.style.display = sel.value === '__custom__' ? 'block' : 'none';
   });
-  clone.querySelectorAll('.btn-danger').forEach(b => b.onclick = () => b.closest('tr').remove());
+  clone.querySelectorAll('.btn-danger').forEach(b => b.onclick = () => removeAbsenceRow(b));
   clone.querySelectorAll('[onclick*="duplicateAbsenceRow"]').forEach(b => b.onclick = () => duplicateAbsenceRow(b));
   tr.parentNode.insertBefore(clone, tr.nextSibling);
+}
+
+// Deletes an absence row. If a coverage assignment already exists for that
+// exact teacher+period (the day's already been run), confirms, then removes
+// that log entry too — otherwise it would silently come back the next time
+// Run Coverage runs for this date, since the engine re-reads this row.
+function removeAbsenceRow(btn) {
+  const tr = btn.closest('tr');
+  const dateStr = document.getElementById('run-date').value;
+  const sel = tr.querySelector('.abs-teacher');
+  const custom = tr.querySelector('.abs-teacher-custom');
+  const teacher = sel ? (sel.value === '__custom__' ? (custom ? custom.value.trim() : '') : sel.value) : '';
+  const period = parseInt(tr.querySelector('.abs-period')?.value);
+
+  const existingEntry = (teacher && dateStr)
+    ? getLog().find(e => e.date === dateStr && e.absentTeacher === teacher && e.period === period)
+    : null;
+
+  if (existingEntry) {
+    if (!confirm(`${teacher} already has a coverage assignment for Period ${period} (${existingEntry.coveringTeacher}). Removing this row will remove that assignment too. Continue?`)) return;
+    pushUndoSnapshot(`Remove absence — ${teacher} P${period} (${dateStr})`);
+    removeCoverageEntry(dateStr, teacher, period);
+    refreshOutputIfShowingDate(dateStr);
+  }
+
+  tr.remove();
+  if (dateStr) saveAbsencesForDate(dateStr);
 }
 
 function showImportAlert(type, msg) {
