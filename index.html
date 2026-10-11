@@ -2699,7 +2699,39 @@ function scheduledClassFor(teacherName, dayName, period) {
   if (!classes) return null;
   const match = classes.find(c => c.day === dayName && c.period === period);
   if (!match) return 'free';
-  return { courseName: match.courseName || '', section: match.section || '', room: match.room || '' };
+  return { courseName: match.courseName || '', section: match.section || '', room: match.room || '', level: match.level || null, subject: match.subject || null };
+}
+
+// Splits a Schedule CSV "Subject" cell like "MS: Mathematics" into
+// { level: 'MS', subject: 'Mathematics' }. Values with no "MS:"/"US:"
+// prefix ("Advisory", "Jump Start", "Coverage", "Study Hall", "UNSCHD", a
+// blank cell) aren't real subjects and come back as {} on purpose — nothing
+// that depends on level/subject should treat those as a match either way.
+function parseSubjectField(raw) {
+  const m = (raw || '').trim().match(/^(MS|US):\s*(.+)$/i);
+  if (!m) return {};
+  return { level: m[1].toUpperCase(), subject: m[2].trim() };
+}
+
+// A teacher's own level (MS or US), by majority among their real scheduled
+// classes that have one — "Advisory"/"Jump Start"/etc. don't count either
+// way. null if the Schedule has nothing for them or no Subject column.
+function teacherLevel(teacherName) {
+  const classes = scheduleData[teacherName];
+  if (!classes) return null;
+  let ms = 0, us = 0;
+  classes.forEach(c => { if (c.level === 'MS') ms++; else if (c.level === 'US') us++; });
+  if (ms === 0 && us === 0) return null;
+  return ms >= us ? 'MS' : 'US';
+}
+
+// The distinct subjects a teacher is actually scheduled to teach, from the
+// Subject column. Empty set if the Schedule has nothing for them or no
+// Subject column was present.
+function teacherSubjects(teacherName) {
+  const classes = scheduleData[teacherName];
+  if (!classes) return new Set();
+  return new Set(classes.map(c => c.subject).filter(Boolean));
 }
 
 // For a later day in a range run: re-derives each row's course/section/room
@@ -2790,6 +2822,12 @@ function assignCoverage(absences, dateStr, outsideSubCount) {
   const dayName = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
   const weeklyCounts = getWeeklyCounts(dateStr);
   const weekAssigned = getWeekAssigned(dateStr);
+  // Computed once per run, from the loaded Schedule's Subject column — see
+  // teacherLevel/teacherSubjects. Empty/null when there's no Schedule
+  // loaded or it has no Subject column, in which case the tie-breaker
+  // below never fires and picks work exactly as they did before this.
+  const rosterLevelByName = new Map(roster.map(t => [t.name, teacherLevel(t.name)]));
+  const rosterSubjectsByName = new Map(roster.map(t => [t.name, teacherSubjects(t.name)]));
   // Every entry here registers its teacher as absent today, including a
   // 'skip' row (a period needing no substitute, e.g. a confirmed free
   // period on a multi-day range) — it must still count toward
@@ -2949,6 +2987,25 @@ function assignCoverage(absences, dateStr, outsideSubCount) {
       !absentTeachers.has(t.name)
     );
 
+    // The absent class's real level/subject, from the Schedule's Subject
+    // column, when there's a schedule match for this exact day/period.
+    // scheduledClassFor can also return 'free' or null (no match) — level
+    // and subject only exist on the real-match object shape.
+    const absSched = scheduledClassFor(ab.absentTeacher, dayName, ab.period);
+    const absLevel = absSched && typeof absSched === 'object' ? absSched.level : null;
+    const absSubject = absSched && typeof absSched === 'object' ? absSched.subject : null;
+    // A genuine tie-breaker, not an additive score: only consulted once
+    // every fairness factor below is already exactly equal, so it can
+    // never outrank a fairer pick, no matter how small the gap. An MS
+    // teacher matches for an MS class; a subject match for a US (high
+    // school) class. Always false with no Schedule loaded, no Subject
+    // column, or a non-subject block ("Advisory", "Study Hall", etc).
+    const levelMatches = (t) => {
+      if (absLevel === 'MS') return rosterLevelByName.get(t.name) === 'MS';
+      if (absLevel === 'US' && absSubject) return !!rosterSubjectsByName.get(t.name)?.has(absSubject);
+      return false;
+    };
+
     eligible.sort((a, b) => {
       const sa = priorityScore(a, weeklyCounts[a.name] || 0);
       const sb = priorityScore(b, weeklyCounts[b.name] || 0);
@@ -2966,6 +3023,8 @@ function assignCoverage(absences, dateStr, outsideSubCount) {
       const aTotal = sa + aWeek + aTmp + aRemaining * 0.2;
       const bTotal = sb + bWeek + bTmp + bRemaining * 0.2;
       if (aTotal !== bTotal) return aTotal - bTotal;
+      const aMatch = levelMatches(a), bMatch = levelMatches(b);
+      if (aMatch !== bMatch) return aMatch ? -1 : 1;
       const da = a.lastCoverageDate || '2000-01-01';
       const db = b.lastCoverageDate || '2000-01-01';
       if (da !== db) return da < db ? -1 : 1;
@@ -4384,6 +4443,11 @@ function loadScheduleCSV(event) {
         description: headers.findIndex(h => h.toLowerCase() === 'description'),
         meetingTimes: headers.findIndex(h => h.toLowerCase() === 'meeting times'),
         status: headers.findIndex(h => h.toLowerCase() === 'status'),
+        // Optional. Values like "MS: Mathematics" / "US: Science" give both
+        // the level and the subject; non-prefixed values ("Advisory",
+        // "Jump Start", "Coverage", "Study Hall", "UNSCHD", ...) aren't real
+        // subjects and are left blank on purpose — see parseSubjectField.
+        subject: headers.findIndex(h => h.toLowerCase() === 'subject'),
       };
 
       scheduleData = {};
@@ -4409,6 +4473,7 @@ function loadScheduleCSV(event) {
         const courseName = (cols[idx.description] || '').trim();
         const section = (cols[idx.classId] || '').trim();
         const fallbackRoom = idx.room >= 0 ? (cols[idx.room] || '').trim() : '';
+        const { level, subject } = idx.subject >= 0 ? parseSubjectField(cols[idx.subject]) : {};
 
         // Parse meeting times like "M-3", "T-5, W-5", "MWR-1, F-7"
         const slots = parseMeetingTimes(meetingTimes);
@@ -4421,7 +4486,7 @@ function loadScheduleCSV(event) {
           // Look up specific room from room chart first
           const chartRoom = getRoomFromChart(section, day, period);
           const room = chartRoom || fallbackRoom;
-          scheduleData[teacher].push({ day, period, courseName, section, room });
+          scheduleData[teacher].push({ day, period, courseName, section, room, level, subject });
         });
         parsed++;
       }
