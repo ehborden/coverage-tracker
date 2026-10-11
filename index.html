@@ -5599,13 +5599,21 @@ function renderWeeklyGrid() {
 // ═══════════════════════════════════════════════════════
 
 // roomChartData: { 'SCI 8-1': { 'Monday-2': '309', 'Wednesday-1': '324', ... } }
+// Keyed by the uppercased, trimmed class ID (see normalizeClassId) —
+// the Schedule export and the Room Chart export don't reliably agree on
+// capitalization for the same class (e.g. "ENG 11-4" vs "Eng 11-4"), so
+// matching between them has to ignore case or it silently never matches.
 let roomChartData = {};
 
 const ROOM_CHART_DAY_MAP = { M: 'Monday', T: 'Tuesday', W: 'Wednesday', R: 'Thursday', F: 'Friday' };
 
+function normalizeClassId(id) {
+  return (id || '').trim().toUpperCase();
+}
+
 function getRoomFromChart(classId, day, period) {
   if (!classId || !day || !period) return '';
-  const classEntry = roomChartData[classId.trim()];
+  const classEntry = roomChartData[normalizeClassId(classId)];
   if (!classEntry) return '';
   return classEntry[`${day}-${period}`] || '';
 }
@@ -5667,7 +5675,7 @@ function loadRoomChartCSV(event) {
 
         // Each non-empty cell in a period column is a class ID in that room that period
         Object.entries(colMap).forEach(([colIdx, { day, period }]) => {
-          const classId = (cols[colIdx] || '').trim();
+          const classId = normalizeClassId(cols[colIdx]);
           if (!classId) return;
           if (!roomChartData[classId]) { roomChartData[classId] = {}; classCount++; }
           roomChartData[classId][`${day}-${period}`] = roomNumber;

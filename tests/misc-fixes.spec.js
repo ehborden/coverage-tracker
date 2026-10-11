@@ -60,6 +60,36 @@ test.describe('Misc regression fixes', () => {
     expect(result).toBe('free');
   });
 
+  test('Room Chart matching ignores case, since the Schedule and Room Chart exports don\'t agree on it', async ({ page }) => {
+    await gotoApp(page);
+    page.on('dialog', d => d.accept());
+
+    // Real-world shape: the Room Chart export writes this class in Title
+    // Case ("Eng 11-4"), the Schedule export writes the same class in
+    // all-caps ("ENG 11-4"). They have to be treated as the same class.
+    const csv = 'CAP,,M1\n20,420,Eng 11-4\n';
+    await page.evaluate((csvText) => {
+      const file = new File([csvText], 'roomchart.csv', { type: 'text/csv' });
+      loadRoomChartCSV({ target: { files: [file], value: '' } });
+    }, csv);
+    await page.waitForTimeout(200);
+
+    const room = await page.evaluate(() => getRoomFromChart('ENG 11-4', 'Monday', 1));
+    expect(room).toBe('420');
+
+    // A schedule loaded afterward should pick the room up automatically too.
+    const scheduleCsv = 'Teacher,Class ID,Description,Meeting Times,Status\n'
+      + 'Jane Smith,ENG 11-4,English 11,M-1,Active\n';
+    await page.evaluate((csvText) => {
+      const file = new File([csvText], 'schedule.csv', { type: 'text/csv' });
+      loadScheduleCSV({ target: { files: [file], value: '' } });
+    }, scheduleCsv);
+    await page.waitForTimeout(200);
+
+    const scheduledRoom = await page.evaluate(() => scheduledClassFor('Jane Smith', 'Monday', 1).room);
+    expect(scheduledRoom).toBe('420');
+  });
+
   test('Math.random is never used in any assignment or fairness logic', async ({ page }) => {
     // Picks are driven entirely by the weighted sort in assignCoverage; the
     // only legitimate use of Math.random in the whole app is generating a
