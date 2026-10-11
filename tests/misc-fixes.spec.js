@@ -69,4 +69,37 @@ test.describe('Misc regression fixes', () => {
     const matches = [...html.matchAll(/Math\.random/g)];
     expect(matches).toHaveLength(1);
   });
+
+  test('course/room/teacher text is escaped on the output document, not inserted as raw HTML', async ({ page }) => {
+    await gotoApp(page);
+    page.on('dialog', d => d.accept());
+
+    await page.evaluate(() => {
+      setRoster([{ id: 't1', name: 'Jane <b>Smith</b>', tier: '1', highAvail: false, excluded: false,
+        avail: { Monday: [1], Tuesday: [], Wednesday: [], Thursday: [], Friday: [] },
+        lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0 }]);
+      setLog([]);
+      document.getElementById('run-date').value = '2026-06-01';
+      renderAbsencesTable();
+      const row = document.querySelector('#absences-tbody tr');
+      row.querySelector('.abs-teacher').value = '__custom__';
+      row.querySelector('.abs-teacher-custom').value = '<img src=x onerror=alert(1)>';
+      row.querySelector('.abs-period').value = '1';
+      row.querySelector('.abs-course').value = '<script>bad</script> Math';
+      row.querySelector('.abs-section').value = '<b>M-1</b>';
+      row.querySelector('.abs-room').value = '<i>101</i>';
+      runCoverage();
+    });
+
+    // No actual <img>/<script>/<b>/<i> element should exist in the output —
+    // everything from absence data must have come through as inert text.
+    const hasRawTags = await page.evaluate(() =>
+      !!document.querySelector('#output-doc img, #output-doc script, #output-doc b, #output-doc i'));
+    expect(hasRawTags).toBe(false);
+
+    // The text content should still show it, just as literal characters.
+    const text = await page.evaluate(() => document.getElementById('output-doc').textContent);
+    expect(text).toContain('<script>bad</script> Math');
+    expect(text).toContain('Jane <b>Smith</b>');
+  });
 });

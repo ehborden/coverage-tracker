@@ -301,6 +301,38 @@ test.describe('Override and Reset Day', () => {
     expect(await optionsFor(3)).toEqual(['Outside Sub 1', 'Outside Sub 2', 'Outside Sub 3']);
   });
 
+  test('a sub excluded from this period cannot be picked from Override either, not just the automatic engine', async ({ page }) => {
+    await gotoApp(page);
+    page.on('dialog', d => d.accept());
+
+    const result = await page.evaluate(() => {
+      setRoster([{ id: 't1', name: 'Jane Smith', tier: '1', highAvail: false, excluded: false,
+        avail: { Monday: [1], Tuesday: [], Wednesday: [], Thursday: [], Friday: [] },
+        lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0 }]);
+      setLog([{ date: '2026-06-01', absentTeacher: 'X', period: 7, courseName: 'Math', coveringTeacher: 'Jane Smith' }]);
+      setData('cs_outsidesubcount_2026-06-01', 2);
+      setOutsideSubUnavail('2026-06-01', { 'Outside Sub 1': [7] }); // can't cover period 7
+      document.getElementById('override-date').value = '2026-06-01';
+      loadOverrideEntries();
+      const options = [...document.querySelectorAll('#override-new-0 option')]
+        .filter(o => o.value.startsWith('Outside Sub'));
+      return options.map(o => ({ value: o.value, disabled: o.disabled }));
+    });
+
+    expect(result).toEqual([
+      { value: 'Outside Sub 1', disabled: true },
+      { value: 'Outside Sub 2', disabled: false },
+    ]);
+
+    // A disabled <option> can't actually be picked through the real
+    // control the way a person using the dropdown would (setting .value
+    // in script bypasses "disabled", same as it would for any <select>,
+    // so that's not the right thing to test here).
+    await expect(async () => {
+      await page.selectOption('#override-new-0', 'Outside Sub 1', { timeout: 500 });
+    }).rejects.toThrow();
+  });
+
   test('a period can be moved to an outside sub and back via Override, with coverage credit handled correctly both ways', async ({ page }) => {
     await gotoApp(page);
     page.on('dialog', d => d.accept());
