@@ -237,23 +237,35 @@ test.describe('Override and Reset Day', () => {
     expect(dialogCount).toBe(0);
   });
 
-  test('navigating to the Override screen auto-loads today\'s assignments, no extra click needed', async ({ page }) => {
+  test('navigating to the Override screen auto-loads Run Coverage\'s selected date, no extra click needed', async ({ page }) => {
     await gotoApp(page);
     page.on('dialog', d => d.accept());
 
     await page.evaluate(() => {
-      const today = todayStr();
       setRoster([{ id: 't1', name: 'Jane Smith', tier: '1', highAvail: false, excluded: false,
         avail: { Monday: [1], Tuesday: [1], Wednesday: [1], Thursday: [1], Friday: [1] },
         lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0 }]);
-      setLog([{ date: today, absentTeacher: 'X', period: 1, courseName: 'Math', coveringTeacher: 'Jane Smith' }]);
+      setLog([{ date: '2026-06-01', absentTeacher: 'X', period: 1, courseName: 'Math', coveringTeacher: 'Jane Smith' }]);
+      document.getElementById('run-date').value = '2026-06-01';
     });
 
-    // showScreen alone, nothing else, should populate the table.
+    // showScreen alone, nothing else, should populate the table — for
+    // whatever date Run Coverage is sitting on, not necessarily today.
     await page.evaluate(() => showScreen('override'));
 
     const entriesText = await page.evaluate(() => document.getElementById('override-entries').textContent);
     expect(entriesText).toContain('Jane Smith');
+    const dateValue = await page.evaluate(() => document.getElementById('override-date').value);
+    expect(dateValue).toBe('2026-06-01');
+  });
+
+  test('navigating to the Override screen falls back to today when Run Coverage has no date selected', async ({ page }) => {
+    await gotoApp(page);
+    page.on('dialog', d => d.accept());
+
+    await page.evaluate(() => { document.getElementById('run-date').value = ''; });
+    await page.evaluate(() => showScreen('override'));
+
     const dateValue = await page.evaluate(() => document.getElementById('override-date').value);
     const today = await page.evaluate(() => todayStr());
     expect(dateValue).toBe(today);
@@ -268,7 +280,8 @@ test.describe('Override and Reset Day', () => {
         avail: { Monday: [1], Tuesday: [1], Wednesday: [1], Thursday: [1], Friday: [1] },
         lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0 }]);
       setLog([{ date: '2026-06-02', absentTeacher: 'X', period: 1, courseName: 'Math', coveringTeacher: 'Jane Smith' }]);
-      showScreen('override'); // lands on today, which has nothing
+      document.getElementById('run-date').value = '2026-06-01'; // a different date — has nothing
+      showScreen('override');
     });
 
     expect(await page.evaluate(() => document.getElementById('override-entries').textContent)).not.toContain('Jane Smith');
@@ -364,5 +377,131 @@ test.describe('Override and Reset Day', () => {
 
     expect(await page.evaluate(() => getLog()[0].coveringTeacher)).toBe('Jane Smith');
     expect(await page.evaluate(() => getRoster().find(t => t.name === 'Jane Smith').totalCoverages)).toBe(1);
+  });
+
+  test('a reset (UNASSIGNED) slot actually gets reassigned on the next Run Coverage, instead of staying locked as UNASSIGNED forever', async ({ page }) => {
+    await gotoApp(page);
+    page.on('dialog', d => d.accept());
+
+    await page.evaluate(() => {
+      setRoster([{ id: 't1', name: 'Jane Smith', tier: '1', highAvail: false, excluded: false,
+        avail: { Monday: [1], Tuesday: [], Wednesday: [], Thursday: [], Friday: [] },
+        lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0 }]);
+      setLog([]);
+      document.getElementById('run-date').value = '2026-06-01';
+      renderAbsencesTable();
+      const row = document.querySelector('#absences-tbody tr');
+      row.querySelector('.abs-teacher').value = '__custom__';
+      row.querySelector('.abs-teacher-custom').value = 'Bob Jones';
+      row.querySelector('.abs-period').value = '1';
+      row.querySelector('.abs-course').value = 'Math';
+      runCoverage();
+    });
+
+    expect(await page.evaluate(() => getLog()[0].coveringTeacher)).toBe('Jane Smith');
+
+    await page.evaluate(() => {
+      document.getElementById('override-date').value = '2026-06-01';
+      loadOverrideEntries();
+      const idx = _overrideEntries.findIndex(e => e.absentTeacher === 'Bob Jones' && e.period === 1);
+      resetOverride(idx, '2026-06-01');
+    });
+
+    expect(await page.evaluate(() => getLog()[0].coveringTeacher)).toBe('⚠ UNASSIGNED');
+    expect(await page.evaluate(() => getLog().length)).toBe(1); // still one row, not two
+
+    // Re-running coverage for the same date should give the reset slot a
+    // real pick again, not just carry the UNASSIGNED row forward as "locked".
+    await page.evaluate(() => { renderAbsencesTable(); runCoverage(); });
+
+    const log = await page.evaluate(() => getLog());
+    expect(log.length).toBe(1); // overwritten in place, not duplicated
+    expect(log[0].coveringTeacher).toBe('Jane Smith');
+    expect(await page.evaluate(() => getRoster().find(t => t.name === 'Jane Smith').totalCoverages)).toBe(1);
+  });
+
+  test('Reset All clears every assignment on the date in one action', async ({ page }) => {
+    await gotoApp(page);
+    page.on('dialog', d => d.accept());
+
+    await page.evaluate(() => {
+      setRoster([
+        { id: 't1', name: 'Jane Smith', tier: '1', highAvail: false, excluded: false,
+          avail: { Monday: [1, 2], Tuesday: [], Wednesday: [], Thursday: [], Friday: [] },
+          lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0 },
+        { id: 't2', name: 'Bob Jones', tier: '1', highAvail: false, excluded: false,
+          avail: { Monday: [1, 2], Tuesday: [], Wednesday: [], Thursday: [], Friday: [] },
+          lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0 },
+      ]);
+      setLog([]);
+      document.getElementById('run-date').value = '2026-06-01';
+      renderAbsencesTable();
+      const row = document.querySelector('#absences-tbody tr');
+      row.querySelector('.abs-teacher').value = '__custom__';
+      row.querySelector('.abs-teacher-custom').value = 'Absent One';
+      row.querySelector('.abs-period').value = '1';
+      row.querySelector('.abs-course').value = 'Math';
+      addAbsenceRowWithData('Absent Two', 2, 'Science', '', '');
+      runCoverage();
+    });
+
+    expect(await page.evaluate(() => getLog().filter(e => e.date === '2026-06-01').length)).toBe(2);
+
+    await page.evaluate(() => {
+      document.getElementById('override-date').value = '2026-06-01';
+      loadOverrideEntries();
+      resetAllOverride('2026-06-01');
+    });
+
+    const log = await page.evaluate(() => getLog().filter(e => e.date === '2026-06-01'));
+    expect(log.length).toBe(2); // rows kept, not deleted
+    expect(log.every(e => e.coveringTeacher === '⚠ UNASSIGNED')).toBe(true);
+    const totals = await page.evaluate(() => ({
+      jane: getRoster().find(t => t.name === 'Jane Smith').totalCoverages,
+      bob: getRoster().find(t => t.name === 'Bob Jones').totalCoverages,
+    }));
+    expect(totals).toEqual({ jane: 0, bob: 0 });
+  });
+
+  test('Remove All deletes every assignment and absence row on the date in one action', async ({ page }) => {
+    await gotoApp(page);
+    page.on('dialog', d => d.accept());
+
+    await page.evaluate(() => {
+      setRoster([
+        { id: 't1', name: 'Jane Smith', tier: '1', highAvail: false, excluded: false,
+          avail: { Monday: [1, 2], Tuesday: [], Wednesday: [], Thursday: [], Friday: [] },
+          lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0 },
+        { id: 't2', name: 'Bob Jones', tier: '1', highAvail: false, excluded: false,
+          avail: { Monday: [1, 2], Tuesday: [], Wednesday: [], Thursday: [], Friday: [] },
+          lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0 },
+      ]);
+      setLog([]);
+      document.getElementById('run-date').value = '2026-06-01';
+      renderAbsencesTable();
+      const row = document.querySelector('#absences-tbody tr');
+      row.querySelector('.abs-teacher').value = '__custom__';
+      row.querySelector('.abs-teacher-custom').value = 'Absent One';
+      row.querySelector('.abs-period').value = '1';
+      row.querySelector('.abs-course').value = 'Math';
+      addAbsenceRowWithData('Absent Two', 2, 'Science', '', '');
+      runCoverage();
+    });
+
+    expect(await page.evaluate(() => getLog().length)).toBe(2);
+    expect(await page.evaluate(() => getAbsencesByDate('2026-06-01').length)).toBe(2);
+
+    await page.evaluate(() => {
+      document.getElementById('override-date').value = '2026-06-01';
+      loadOverrideEntries();
+      removeAllOverride('2026-06-01');
+    });
+
+    expect(await page.evaluate(() => getLog().length)).toBe(0);
+    expect(await page.evaluate(() => getAbsencesByDate('2026-06-01').length)).toBe(0);
+
+    // Re-running should not resurrect anything — the absences are really gone.
+    await page.evaluate(() => { renderAbsencesTable(); runCoverage(); });
+    expect(await page.evaluate(() => getLog().length)).toBe(0);
   });
 });
