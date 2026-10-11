@@ -1478,6 +1478,19 @@ function isSpecialLabel(label) {
   return isOutsideSub(label) || isUnassigned(label);
 }
 
+// The labels a day's configured outside-sub count actually produces: none
+// for 0, plain "Outside Sub" for 1, numbered "Outside Sub 1"/"2"/... for
+// more. Shared by the assignment engine and the Override screen's dropdown
+// so a day configured for, say, 1 outside sub doesn't offer "Outside Sub 2"
+// as if it existed, and a day configured for 3 isn't missing the third.
+function outsideSubLabelsForCount(count) {
+  if (!count || count <= 0) return [];
+  if (count === 1) return ['Outside Sub'];
+  const labels = [];
+  for (let i = 0; i < count; i++) labels.push(`Outside Sub ${i + 1}`);
+  return labels;
+}
+
 // ── Roster ───────────────────────────────────────────
 
 function getRoster() {
@@ -2819,7 +2832,7 @@ function assignCoverage(absences, dateStr, outsideSubCount) {
       if (outsideSubPeriodMap[k]) return;
       for (let i = 0; i < outsideSubCount; i++) {
         if (!subUsage[i].has(absence.period)) {
-          outsideSubPeriodMap[k] = outsideSubCount > 1 ? `Outside Sub ${i+1}` : 'Outside Sub';
+          outsideSubPeriodMap[k] = outsideSubLabelsForCount(outsideSubCount)[i];
           subUsage[i].add(absence.period);
           break;
         }
@@ -4058,8 +4071,10 @@ function renderOverrideTable() {
     unavailable.sort();
     const busyThisPeriod = alreadyCovering[period] || new Set();
 
-    // Outside Sub options
-    let opts = `<option value="Outside Sub 1">Outside Sub 1</option><option value="Outside Sub 2">Outside Sub 2</option>`;
+    // Outside Sub options — only the ones this date is actually configured
+    // for (the Outside Subs Coming count on Run Coverage), not a fixed two.
+    const subCount = getData('cs_outsidesubcount_' + dateStr, 0);
+    let opts = outsideSubLabelsForCount(subCount).map(label => `<option value="${esc(label)}">${esc(label)}</option>`).join('');
 
     if (available.length) {
       opts += `<optgroup label="Available Period ${period}">`;
