@@ -258,4 +258,24 @@ test.describe('Override and Reset Day', () => {
     const today = await page.evaluate(() => todayStr());
     expect(dateValue).toBe(today);
   });
+
+  test('changing the date field on the Override screen auto-loads that date, no Load Assignments click needed', async ({ page }) => {
+    await gotoApp(page);
+    page.on('dialog', d => d.accept());
+
+    await page.evaluate(() => {
+      setRoster([{ id: 't1', name: 'Jane Smith', tier: '1', highAvail: false, excluded: false,
+        avail: { Monday: [1], Tuesday: [1], Wednesday: [1], Thursday: [1], Friday: [1] },
+        lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0 }]);
+      setLog([{ date: '2026-06-02', absentTeacher: 'X', period: 1, courseName: 'Math', coveringTeacher: 'Jane Smith' }]);
+      showScreen('override'); // lands on today, which has nothing
+    });
+
+    expect(await page.evaluate(() => document.getElementById('override-entries').textContent)).not.toContain('Jane Smith');
+
+    await page.fill('#override-date', '2026-06-02'); // fires the input's change event, same as a real pick
+
+    const entriesText = await page.evaluate(() => document.getElementById('override-entries').textContent);
+    expect(entriesText).toContain('Jane Smith');
+  });
 });
