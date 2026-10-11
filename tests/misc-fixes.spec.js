@@ -108,6 +108,33 @@ test.describe('Misc regression fixes', () => {
     expect(room).toBe('403');
   });
 
+  test('uploading a new Schedule CSV automatically offers to sync roster availability, instead of needing a separate click', async ({ page }) => {
+    await gotoApp(page);
+    const dialogs = [];
+    page.on('dialog', d => { dialogs.push(d.message()); d.accept(); });
+
+    await page.evaluate(() => { setRoster([]); });
+
+    // A "Coverage" row is what makes deriveAvailabilityFromSchedule actually
+    // have something to offer (see isCoverageSlot) — without one it exits
+    // early with no dialog at all, which is covered by the other tests
+    // above that upload schedules with no Coverage row and see nothing hang.
+    const csv = 'Teacher,Class ID,Description,Meeting Times,Status\n'
+      + 'Jane Smith,M-1,Algebra,M-1,Active\n'
+      + 'Jane Smith,CVRG-1,Coverage,T-2,Active\n';
+
+    await page.evaluate((csvText) => {
+      const file = new File([csvText], 'schedule.csv', { type: 'text/csv' });
+      loadScheduleCSV({ target: { files: [file], value: '' } });
+    }, csv);
+    await page.waitForTimeout(200);
+
+    expect(dialogs.some(m => m.includes('Sync roster with schedule'))).toBe(true);
+    const jane = await page.evaluate(() => getRoster().find(t => t.name === 'Jane Smith'));
+    expect(jane).toBeTruthy();
+    expect(jane.avail.Tuesday).toEqual([2]);
+  });
+
   test('Math.random is never used in any assignment or fairness logic', async ({ page }) => {
     // Picks are driven entirely by the weighted sort in assignCoverage; the
     // only legitimate use of Math.random in the whole app is generating a

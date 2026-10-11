@@ -4579,6 +4579,14 @@ function loadScheduleCSV(event) {
       saveScheduleToStorage();
       refreshAbsenceDropdowns();
       populateAbtTeacherDropdown();
+      // Coverage periods shift even when staff doesn't, so a fresh schedule
+      // upload needs availability re-derived from it right away — otherwise
+      // it's easy to forget the separate trip to Roster -> Sync with
+      // Schedule, and run coverage against stale availability without
+      // noticing. Same human-reviewed confirm dialog as clicking the
+      // button directly, just triggered automatically instead of relying
+      // on someone to remember it.
+      deriveAvailabilityFromSchedule();
     } catch(err) {
       showImportAlert('error', 'Could not parse schedule CSV: ' + err.message);
     }
