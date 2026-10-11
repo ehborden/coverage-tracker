@@ -3086,6 +3086,57 @@ function assignCoverage(absences, dateStr, outsideSubCount) {
     }
   });
 
+  // Two absences in the same period can each land on the fairness-correct
+  // teacher individually while still crossing MS/HS lines (e.g. the fairer
+  // pick for the HS class happens to be an MS teacher, and vice versa for
+  // the MS class in the same period). Swapping which of the two already-
+  // chosen teachers covers which class doesn't change who's used or anyone's
+  // coverage count, so there's no fairness cost — only do it when it
+  // improves the level/subject match on at least one side and never makes
+  // the other side worse.
+  const matchForEntry = (entry, teacherName) => {
+    const sched = scheduledClassFor(entry.absentTeacher, dayName, entry.period);
+    const level = sched && typeof sched === 'object' ? sched.level : null;
+    const subject = sched && typeof sched === 'object' ? sched.subject : null;
+    if (level === 'MS') return rosterLevelByName.get(teacherName) === 'MS';
+    if (level === 'US' && subject) return !!rosterSubjectsByName.get(teacherName)?.has(subject);
+    return false;
+  };
+  const rebuildReason = (entry) => {
+    const teacher = roster.find(t => t.name === entry.coveringTeacher);
+    if (!teacher) return;
+    const sched = scheduledClassFor(entry.absentTeacher, dayName, entry.period);
+    const level = sched && typeof sched === 'object' ? sched.level : null;
+    const subject = sched && typeof sched === 'object' ? sched.subject : null;
+    const wk = weeklyCounts[teacher.name] || 0;
+    const matchNote = matchForEntry(entry, teacher.name)
+      ? (level === 'MS' ? ' · MS match' : ` · Subject match: ${subject}`)
+      : '';
+    entry.assignReason = `Tier ${teacher.tier} · ${wk} coverage${wk !== 1 ? 's' : ''} this week · Last: ${teacher.lastCoverageDate || 'never'} · Total: ${teacher.totalCoverages || 0}${matchNote}`;
+  };
+  const byPeriodForSwap = {};
+  newEntries.forEach(e => {
+    if (typeof e.assignReason === 'string' && e.assignReason.startsWith('Tier ')) {
+      (byPeriodForSwap[e.period] = byPeriodForSwap[e.period] || []).push(e);
+    }
+  });
+  Object.values(byPeriodForSwap).forEach(group => {
+    for (let i = 0; i < group.length; i++) {
+      for (let j = i + 1; j < group.length; j++) {
+        const e1 = group[i], e2 = group[j];
+        const before = (matchForEntry(e1, e1.coveringTeacher) ? 1 : 0) + (matchForEntry(e2, e2.coveringTeacher) ? 1 : 0);
+        const after = (matchForEntry(e1, e2.coveringTeacher) ? 1 : 0) + (matchForEntry(e2, e1.coveringTeacher) ? 1 : 0);
+        if (after > before) {
+          const t1 = e1.coveringTeacher, t2 = e2.coveringTeacher;
+          e1.coveringTeacher = t2;
+          e2.coveringTeacher = t1;
+          rebuildReason(e1);
+          rebuildReason(e2);
+        }
+      }
+    }
+  });
+
   return { assignments, newEntries, unassigned, conflicts, lockedCount: lockedExisting.length };
 }
 
