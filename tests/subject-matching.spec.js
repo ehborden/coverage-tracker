@@ -175,4 +175,50 @@ test.describe('MS/subject-aware coverage picks (derived from the Schedule CSV)',
     const tooltipText = await page.evaluate(() => document.querySelector('.assign-reason')?.dataset.reason);
     expect(tooltipText).toContain('MS match');
   });
+
+  test('two same-period absences (one MS, one HS) swap to the matching teacher when both get picked anyway, with no change in who is used', async ({ page }) => {
+    await gotoApp(page);
+    page.on('dialog', d => d.accept());
+
+    await page.evaluate(() => {
+      setRoster([
+        // Strictly fairer than "HS Background" (0 coverages this week vs 1),
+        // so picked first for whichever absence is processed first — even
+        // though this teacher's own background is MS, not HS.
+        { id: 't1', name: 'MS Background', tier: '1', highAvail: false, excluded: false,
+          avail: { Monday: [2], Tuesday: [], Wednesday: [], Thursday: [], Friday: [] },
+          lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0 },
+        { id: 't2', name: 'HS Background', tier: '1', highAvail: false, excluded: false,
+          avail: { Monday: [2], Tuesday: [], Wednesday: [], Thursday: [], Friday: [] },
+          lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0 },
+      ]);
+      // "HS Background" already covered once this week, so is strictly
+      // less fair than "MS Background" — not a tie, so without the swap
+      // pass the plain per-absence fairness sort picks "MS Background"
+      // first regardless of which class needs covering.
+      setLog([{ date: '2026-05-28', period: 1, coveringTeacher: 'HS Background', absentTeacher: 'Someone Else' }]);
+      scheduleData = {
+        'Absent HS Teacher': [{ day: 'Monday', period: 2, courseName: 'Chemistry', section: '12-1', room: '', level: 'US', subject: 'Science' }],
+        'Absent MS Teacher': [{ day: 'Monday', period: 2, courseName: 'Algebra', section: '7-1', room: '', level: 'MS', subject: 'Mathematics' }],
+        'MS Background': [{ day: 'Tuesday', period: 1, courseName: 'Geometry', section: '', room: '', level: 'MS', subject: 'Mathematics' }],
+        'HS Background': [{ day: 'Tuesday', period: 1, courseName: 'Biology', section: '', room: '', level: 'US', subject: 'Science' }],
+      };
+      document.getElementById('run-date').value = '2026-06-01'; // a Monday
+      document.getElementById('absences-tbody').innerHTML = '';
+      addAbsenceRowWithData('Absent HS Teacher', 2, 'Chemistry', '12-1', '');
+      addAbsenceRowWithData('Absent MS Teacher', 2, 'Algebra', '7-1', '');
+      runCoverage();
+    });
+
+    const log = await page.evaluate(() => getLog());
+    const hsEntry = log.find(e => e.absentTeacher === 'Absent HS Teacher');
+    const msEntry = log.find(e => e.absentTeacher === 'Absent MS Teacher');
+
+    // Same two teachers used either way — just matched to the right class.
+    expect(new Set([hsEntry.coveringTeacher, msEntry.coveringTeacher])).toEqual(new Set(['MS Background', 'HS Background']));
+    expect(hsEntry.coveringTeacher).toBe('HS Background');
+    expect(msEntry.coveringTeacher).toBe('MS Background');
+    expect(hsEntry.assignReason).toContain('Subject match: Science');
+    expect(msEntry.assignReason).toContain('MS match');
+  });
 });
