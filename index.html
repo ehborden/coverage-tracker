@@ -687,7 +687,7 @@
             <input type="file" accept=".json" style="display:none" onchange="importAllData(event);toggleDataMenu()" />
           </label>
           <div style="height:1px;background:rgba(255,255,255,0.15);margin:4px 0"></div>
-          <button onclick="openSyncModal();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:white;font-family:inherit;font-size:13px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Sync with GitHub</button>
+          <button onclick="openSyncModal();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:white;font-family:inherit;font-size:13px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Connect with GitHub</button>
           <button onclick="openRestoreGithubModal();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:white;font-family:inherit;font-size:13px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Restore from GitHub</button>
           <div style="height:1px;background:rgba(255,255,255,0.15);margin:4px 0"></div>
           <button onclick="startNewYear();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:white;font-family:inherit;font-size:13px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Start New Year</button>
@@ -1209,7 +1209,7 @@
 
 <div class="modal-overlay" id="sync-modal">
   <div class="modal" style="max-width:480px">
-    <div class="modal-title">Sync with GitHub</div>
+    <div class="modal-title">Connect with GitHub</div>
     <p style="color:var(--gray-600);margin-bottom:16px;font-size:13px">Saves the roster, log, schedule, room chart, and day-to-day entries to a private GitHub repo, so every computer that connects sees the same data. Set this up once on each computer.</p>
     <div>
       <label for="sync-owner">GitHub username</label>
@@ -1851,7 +1851,7 @@ window.addEventListener('beforeunload', () => {
 
 // ═══════════════════════════════════════════════════════
 //  GITHUB SYNC
-//  Optional. Off until someone fills in Sync with GitHub.
+//  Optional. Off until someone fills in Connect with GitHub.
 //  Saves the roster, log, schedule, room chart, and the day-to-day
 //  stuff (absences/notes/outside-sub counts/email template/senior
 //  flag, bundled as one "daily" file) to a private GitHub repo, so
@@ -1952,7 +1952,7 @@ class SyncError extends Error {
 }
 
 function httpError(res) {
-  if (res.status === 401) return new SyncError('error', 'Your GitHub token stopped working (it may have expired). Open Sync with GitHub and paste a new one.');
+  if (res.status === 401) return new SyncError('error', 'Your GitHub token stopped working (it may have expired). Open Connect with GitHub and paste a new one.');
   if (res.status === 404) return new SyncError('error', `Can't find the repo "${sync.owner}/${sync.repo}", or the token isn't allowed to see it.`);
   if (res.status === 403 || res.status === 429) return new SyncError('error', 'GitHub refused the save. Check that the token has Contents set to "Read and write".');
   return new SyncError('error', `GitHub said ${res.status}. Your changes are safe on this computer.`);

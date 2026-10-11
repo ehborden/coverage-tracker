@@ -135,7 +135,7 @@ test.describe('GitHub sync', () => {
     await contextB.close();
   });
 
-  test('the Sync with GitHub modal rejects a public repo and connects once the mock reports it private', async ({ page }) => {
+  test('the Connect with GitHub modal rejects a public repo and connects once the mock reports it private', async ({ page }) => {
     const store = makeGithubStore({ private: false });
     page.on('dialog', d => d.accept());
     await installGithubMock(page.context(), store);
