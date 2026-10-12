@@ -78,8 +78,7 @@ Sync and manual Backup/Restore work together: a manual Restore still fully repla
 ## Known limitations
 
 - **Renaming a teacher breaks their history.** The app matches teachers by name across the log, schedule, and notes, not by a stable ID. Edit a teacher's name in Roster and their past coverage history, schedule lookups, and saved notes stay filed under the old name. If a name is wrong, delete and re-add rather than renaming.
-- **No real multi-computer sync.** See above. Backup/Restore is a manual bridge, not a shared source of truth.
-- **SharePoint storage mode exists in the code but isn't wired up.** There's a `STORAGE_MODE` constant and a full set of SharePoint REST helpers in the file, dead code today (`STORAGE_MODE` is hardcoded to `'local'`). This would be the real fix for multi-computer sync if someone takes it on, but it's untested and not a quick flip.
+- **SharePoint storage mode exists in the code but isn't wired up.** There's a `STORAGE_MODE` constant and a full set of SharePoint REST helpers in the file, dead code today (`STORAGE_MODE` is hardcoded to `'local'`) — an alternative backend nobody finished. Not needed for multi-computer sync now that GitHub sync (above) handles that.
 
 ## Running the test suite
 
