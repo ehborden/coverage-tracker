@@ -31,6 +31,20 @@ async function seedGradeOutDay(page) {
   });
 }
 
+// Sets the run date and types one absence row, the way a person would.
+async function enterAbsence(page, date, teacher, period, course, section) {
+  await page.evaluate(({ date, teacher, period, course, section }) => {
+    document.getElementById('run-date').value = date;
+    onDateChange();
+    const row = document.querySelector('#absences-tbody tr');
+    row.querySelector('.abs-teacher').value = '__custom__';
+    row.querySelector('.abs-teacher-custom').value = teacher;
+    row.querySelector('.abs-period').value = String(period);
+    row.querySelector('.abs-course').value = course;
+    row.querySelector('.abs-section').value = section;
+  }, { date, teacher, period, course, section });
+}
+
 test.describe('Grade Out / Field Trip', () => {
   test('grades come from the "SUBJ GRADE-SECTION" code, including combined 6/7, and a section number is never read as a grade', async ({ page }) => {
     await gotoApp(page);
@@ -130,7 +144,7 @@ test.describe('Grade Out / Field Trip', () => {
     await page.selectOption('#trip-chaperone-select', 'Tenth Teacher');
     await page.getByRole('button', { name: 'Add as chaperone' }).click();
     await expect(page.locator('#trip-chaperone-list')).toContainText('Tenth Teacher');
-    await expect(page.locator('#trip-notes')).toContainText('Tenth Teacher still has P3 HIS 10-2');
+    await expect(page.locator('#trip-warnings')).toContainText('Tenth Teacher still has P3 HIS 10-2 today with no absence row');
 
     await page.locator('.trip-grade-check[data-grade="9"]').check();
     const saved = await page.evaluate((d) => getTripDay(d), MONDAY);
@@ -177,5 +191,55 @@ test.describe('Grade Out / Field Trip', () => {
 
     expect(await pageB.evaluate((d) => getTripDay(d), MONDAY)).toEqual({ gradesOut: ['9'], chaperones: ['Jane Smith'] });
     await contextB.close();
+  });
+  test('a grade out set after coverage was already run flags the stale assignment, and removing it keeps the teacher out', async ({ page }) => {
+    page.on('dialog', d => d.accept());
+    await gotoApp(page);
+    await seedGradeOutDay(page);
+    await enterAbsence(page, MONDAY, 'Absent Ninth', 3, 'English 9', 'ENG 9-1');
+    await page.evaluate(() => runCoverage());
+    expect(await page.evaluate(() => getLog().map(e => e.coveringTeacher))).toEqual(['Chaperone Free']);
+
+    await page.locator('.trip-grade-check[data-grade="9"]').check();
+    await expect(page.locator('#trip-warnings')).toContainText('Absent Ninth P3 ENG 9-1 is covered by Chaperone Free, but that grade is out');
+
+    await page.getByRole('button', { name: 'Remove those assignments' }).click();
+    const after = await page.evaluate((d) => ({
+      log: getLog(),
+      absences: getAbsencesByDate(d),
+      total: getRoster().find(t => t.name === 'Chaperone Free').totalCoverages,
+    }), MONDAY);
+    expect(after.log).toEqual([]);
+    expect(after.total).toBe(0);
+    expect(after.absences).toEqual([expect.objectContaining({ teacher: 'Absent Ninth', period: 3, absType: 'skip' })]);
+    await expect(page.locator('#trip-warnings')).toHaveCount(0);
+  });
+
+  test('a chaperone added after coverage was run is flagged, and the next run replaces them', async ({ page }) => {
+    page.on('dialog', d => d.accept());
+    await gotoApp(page);
+    await seedGradeOutDay(page);
+    await enterAbsence(page, MONDAY, 'Absent Teacher', 3, 'Biology', 'SCI 10-1');
+    await page.evaluate(() => runCoverage());
+    expect(await page.evaluate(() => getLog()[0].coveringTeacher)).toBe('Chaperone Free');
+
+    await page.selectOption('#trip-chaperone-select', 'Chaperone Free');
+    await page.getByRole('button', { name: 'Add as chaperone' }).click();
+    await expect(page.locator('#trip-warnings')).toContainText('Chaperone Free is a chaperone but is assigned to cover Absent Teacher P3');
+
+    await page.evaluate(() => runCoverage());
+    expect(await page.evaluate(() => getLog()[0].coveringTeacher)).not.toBe('Chaperone Free');
+    await page.evaluate(() => renderTripPanel());
+    await expect(page.locator('#trip-warnings')).not.toContainText('is a chaperone but is assigned');
+  });
+
+  test('the "no absence row" reminder for a chaperone clears once a row is added for that class', async ({ page }) => {
+    await gotoApp(page);
+    await seedGradeOutDay(page);
+    await page.evaluate((d) => setTripDay(d, { gradesOut: [], chaperones: ['Tenth Teacher'] }), MONDAY);
+    await enterAbsence(page, MONDAY, 'Tenth Teacher', 3, 'History', 'HIS 10-2');
+    await expect(page.locator('#trip-warnings')).toContainText('Tenth Teacher still has P3 HIS 10-2 today with no absence row');
+    await page.locator('#absences-tbody .abs-course').first().dispatchEvent('change');
+    await expect(page.locator('#trip-area')).not.toContainText('with no absence row');
   });
 });
