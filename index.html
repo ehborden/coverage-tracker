@@ -2974,7 +2974,8 @@ function rowsForRangeDay(baseAbsences, dayName) {
       });
       return;
     }
-    const dayClasses = classes.filter(c => c.day === dayName);
+    // Coverage duty periods aren't classes and never need a sub
+    const dayClasses = classes.filter(c => c.day === dayName && !isCoverageSlot(c));
     if (dayClasses.length === 0) {
       const sample = baseAbsences.find(a => a.absentTeacher === teacher);
       rows.push({ absentTeacher: teacher, period: sample.period, courseName: '', sectionNumber: '', roomNumber: '', absType: 'skip' });
@@ -5238,9 +5239,12 @@ function loadTeacherPeriods() {
     const seniorSkip = seniorEnded && classAllInGrades(c, ['12']);
     const gradesOut = dateStr ? getTripDay(dateStr).gradesOut : [];
     const tripSkip = !seniorSkip && gradesOut.length > 0 && classAllInGrades(c, gradesOut);
-    const autoSkip = seniorSkip || tripSkip;
+    // A Coverage duty period isn't a class, so it never needs a sub
+    const coverageSkip = items.every(isCoverageSlot);
+    const autoSkip = seniorSkip || tripSkip || coverageSkip;
     const checkedAttr = autoSkip ? '' : 'checked';
-    const skipNote = seniorSkip ? ' <span style="font-size:10px;color:var(--amber);font-weight:600">Senior class — skipped</span>'
+    const skipNote = coverageSkip ? ' <span style="font-size:10px;color:var(--amber);font-weight:600">Coverage period — skipped</span>'
+      : seniorSkip ? ' <span style="font-size:10px;color:var(--amber);font-weight:600">Senior class — skipped</span>'
       : tripSkip ? ' <span style="font-size:10px;color:var(--amber);font-weight:600">Grade out — skipped</span>' : '';
     return `<label style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-bottom:4px;border:1.5px solid ${autoSkip ? 'var(--amber-light)' : 'var(--gray-200)'};border-radius:6px;cursor:pointer;background:var(--white)" class="abt-row">
       <input type="checkbox" class="abt-period-check" ${checkedAttr}
