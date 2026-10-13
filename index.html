@@ -2150,26 +2150,23 @@ function touchBlob(name) {
   markDirty(name);
 }
 
-function buildDailyBlob() {
+// Only the two fields here aren't tied to a specific date — everything that
+// used to live in one whole-blob "daily" snapshot (absences, notes,
+// outside-sub settings) now merges per-date below instead, so editing one
+// date on one computer can never silently clobber a different date's data
+// from another computer that happens to sync a moment later.
+function buildDailyGlobals() {
   const payload = buildBackupPayload();
-  return {
-    absences: payload.absences,
-    notes: payload.notes,
-    outsideSubCounts: payload.outsideSubCounts,
-    outsideSubUnavail: payload.outsideSubUnavail,
-    seniorClassesEnded: payload.seniorClassesEnded,
-    emailTemplate: payload.emailTemplate,
-  };
+  return { seniorClassesEnded: payload.seniorClassesEnded, emailTemplate: payload.emailTemplate };
 }
 
-function applyDailyBlob(data) {
-  Object.entries(data.absences || {}).forEach(([date, abs]) => setData('cs_absences_' + date, abs));
-  Object.entries(data.notes || {}).forEach(([date, notes]) => localStorage.setItem('cs_notes_' + date, JSON.stringify(notes)));
-  Object.entries(data.outsideSubCounts || {}).forEach(([date, count]) => setData('cs_outsidesubcount_' + date, count));
-  Object.entries(data.outsideSubUnavail || {}).forEach(([date, unavail]) => setOutsideSubUnavail(date, unavail));
+function applyDailyGlobals(data) {
   if (data.seniorClassesEnded !== undefined) localStorage.setItem('cs_senior_ended', data.seniorClassesEnded);
   if (data.emailTemplate !== undefined) localStorage.setItem('cs_email_template', data.emailTemplate);
   loadSeniorClassesFlag();
+}
+
+function refreshAbsencesTableIfShowing() {
   if (document.getElementById('screen-run')?.classList.contains('active')) {
     const a = document.activeElement;
     if (!(a && ['INPUT', 'TEXTAREA', 'SELECT'].includes(a.tagName) && a.closest('#absences-tbody'))) renderAbsencesTable();
@@ -2177,17 +2174,171 @@ function applyDailyBlob(data) {
 }
 
 // Checked at the start of every sync pass (same idea as stampRosterChanges,
-// but for one blob instead of items) so an edit made through one of the many
-// small call sites that touch these keys still gets picked up without each
-// of them having to remember to call markDirty itself.
+// but for one small object instead of items) so an edit made through one of
+// the small call sites that touch these two keys still gets picked up
+// without each of them having to remember to call markDirty itself.
 let _dailyBaselineSig = null;
 function checkDailyChanged() {
-  const sig = JSON.stringify(buildDailyBlob());
-  if (_dailyBaselineSig === null) { _dailyBaselineSig = sig; return; }
+  const sig = JSON.stringify(buildDailyGlobals());
+  if (_dailyBaselineSig === null) { _dailyBaselineSig = sig; return false; }
   if (sig !== _dailyBaselineSig) {
     _dailyBaselineSig = sig;
     touchBlob('daily');
+    return true;
   }
+  return false;
+}
+
+// ── Per-date merge for absences/notes/outside-sub settings ──
+// Each date's bundle is tracked as one mergeable "item" (like a roster
+// teacher or a log entry), keyed by the date string. There's no tombstone
+// concept here — a date's bundle is never "deleted," it just becomes
+// empty, which merges like any other change via plain "newer updated wins."
+
+const DAILY_DATE_PREFIXES = ['cs_absences_', 'cs_notes_', 'cs_outsidesubcount_', 'cs_outsidesub_unavail_'];
+
+function allDailyDates() {
+  const dates = new Set();
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key) continue;
+    for (const prefix of DAILY_DATE_PREFIXES) {
+      if (key.startsWith(prefix)) { dates.add(key.slice(prefix.length)); break; }
+    }
+  }
+  Object.keys(_dailyItemUpdated).forEach(d => dates.add(d));
+  return [...dates];
+}
+
+function dailyItemData(date) {
+  return {
+    absences: getAbsencesByDate(date),
+    notes: JSON.parse(localStorage.getItem('cs_notes_' + date) || '{}'),
+    outsideSubCount: getData('cs_outsidesubcount_' + date, 0),
+    outsideSubUnavail: getOutsideSubUnavail(date),
+  };
+}
+
+function dailyItemFor(date) {
+  return Object.assign({ date, updated: _dailyItemUpdated[date] || 0 }, dailyItemData(date));
+}
+
+function applyDailyItem(item) {
+  setData('cs_absences_' + item.date, item.absences || []);
+  localStorage.setItem('cs_notes_' + item.date, JSON.stringify(item.notes || {}));
+  setData('cs_outsidesubcount_' + item.date, item.outsideSubCount || 0);
+  setOutsideSubUnavail(item.date, item.outsideSubUnavail || {});
+}
+
+let _dailyItemBaseline = {}; // date -> sig of dailyItemData(date), for change detection only
+let _dailyItemUpdated = loadTombstones('cs_daily_item_updated'); // date -> timestamp, the actual merge key
+
+function resetDailyItemBaseline() {
+  _dailyItemBaseline = {};
+  allDailyDates().forEach(date => { _dailyItemBaseline[date] = JSON.stringify(dailyItemData(date)); });
+}
+
+// Called both on its own short interval (see initSync) and defensively at
+// the top of every sync pass, same idea as stampRosterChanges/
+// stampLogChanges — catches an edit no matter which of the many small call
+// sites that touch absences/notes/outside-sub keys made it.
+function stampDailyItemChanges() {
+  const now = Date.now();
+  let changed = false;
+  allDailyDates().forEach(date => {
+    const sig = JSON.stringify(dailyItemData(date));
+    if (_dailyItemBaseline[date] !== sig) {
+      _dailyItemUpdated[date] = now;
+      _dailyItemBaseline[date] = sig;
+      changed = true;
+    }
+  });
+  if (changed) { saveTombstones('cs_daily_item_updated', _dailyItemUpdated); markDirty('daily'); }
+  return changed;
+}
+
+// Reads an old-shape "daily.json" (one whole-blob snapshot, from before
+// per-date merging existed) and reshapes it into per-date items so a
+// repo that still has the old file doesn't look empty or lose data under
+// the new code — every date just inherits the old single timestamp.
+function migrateOldDailyRemote(remoteData) {
+  const old = (remoteData && remoteData.data) || {};
+  const ts = (remoteData && remoteData.updated) || 0;
+  const dates = new Set([
+    ...Object.keys(old.absences || {}),
+    ...Object.keys(old.notes || {}),
+    ...Object.keys(old.outsideSubCounts || {}),
+    ...Object.keys(old.outsideSubUnavail || {}),
+  ]);
+  const items = [...dates].map(date => ({
+    date,
+    absences: (old.absences && old.absences[date]) || [],
+    notes: (old.notes && old.notes[date]) || {},
+    outsideSubCount: (old.outsideSubCounts && old.outsideSubCounts[date]) || 0,
+    outsideSubUnavail: (old.outsideSubUnavail && old.outsideSubUnavail[date]) || {},
+    updated: ts,
+  }));
+  return { items, globals: { seniorClassesEnded: old.seniorClassesEnded, emailTemplate: old.emailTemplate }, globalsUpdated: ts };
+}
+
+async function syncDailyFile(attempt = 0) {
+  const remote = await fetchRemote('daily');
+  stampDailyItemChanges();
+  checkDailyChanged();
+
+  let remoteItems = [];
+  let remoteGlobals = null;
+  let remoteGlobalsUpdated = 0;
+  let isLegacyShape = false;
+  if (remote.data) {
+    if (Array.isArray(remote.data.items)) {
+      remoteItems = remote.data.items;
+      remoteGlobals = remote.data.globals || {};
+      remoteGlobalsUpdated = remote.data.globalsUpdated || 0;
+    } else if (remote.data.data) {
+      isLegacyShape = true;
+      const migrated = migrateOldDailyRemote(remote.data);
+      remoteItems = migrated.items;
+      remoteGlobals = migrated.globals;
+      remoteGlobalsUpdated = migrated.globalsUpdated;
+    }
+  }
+
+  const localItems = allDailyDates().map(dailyItemFor);
+  const beforeSig = canonItems(localItems);
+  const { items: mergedItems } = mergeByKey(localItems, remoteItems, i => i.date, {}, {});
+  mergedItems.forEach(applyDailyItem);
+  _dailyItemUpdated = {};
+  mergedItems.forEach(item => { _dailyItemUpdated[item.date] = item.updated || 0; });
+  saveTombstones('cs_daily_item_updated', _dailyItemUpdated);
+  resetDailyItemBaseline();
+  if (canonItems(mergedItems) !== beforeSig) refreshAbsencesTableIfShowing();
+
+  const localGlobals = buildDailyGlobals();
+  const localGlobalsUpdated = getData('cs_daily_updated', 0);
+  let finalGlobals = localGlobals;
+  let finalGlobalsUpdated = localGlobalsUpdated;
+  if (remoteGlobals && remoteGlobalsUpdated > localGlobalsUpdated) {
+    applyDailyGlobals(remoteGlobals);
+    setData('cs_daily_updated', remoteGlobalsUpdated);
+    _dailyBaselineSig = JSON.stringify(buildDailyGlobals());
+    finalGlobals = remoteGlobals;
+    finalGlobalsUpdated = remoteGlobalsUpdated;
+  }
+
+  const itemsMatch = !isLegacyShape && canonItems(remoteItems) === canonItems(mergedItems);
+  const globalsMatch = !isLegacyShape && remoteGlobals && JSON.stringify(remoteGlobals) === JSON.stringify(finalGlobals) && remoteGlobalsUpdated === finalGlobalsUpdated;
+  if (itemsMatch && globalsMatch) return;
+
+  const body = JSON.stringify({
+    app: 'coverage-tracker', file: 'daily', savedAt: new Date().toISOString(),
+    items: mergedItems, globals: finalGlobals, globalsUpdated: finalGlobalsUpdated,
+  }, null, 1);
+  const put = { message: 'Update daily', content: toB64(body) };
+  if (remote.sha) put.sha = remote.sha;
+  const res = await gh(`/contents/${SYNC_FILENAME.daily}`, { method: 'PUT', body: JSON.stringify(put) });
+  if ((res.status === 409 || res.status === 422) && attempt < 3) return syncDailyFile(attempt + 1);
+  if (!res.ok) throw httpError(res);
 }
 
 const BLOB_SYNC = {
@@ -2213,14 +2364,6 @@ const BLOB_SYNC = {
       if (el && count > 0) el.textContent = `✓ ${count} classes in room chart`;
     },
   },
-  daily: {
-    get: () => ({ data: buildDailyBlob(), updated: getData('cs_daily_updated', 0) }),
-    write(data, updated) {
-      applyDailyBlob(data || {});
-      setData('cs_daily_updated', updated);
-      _dailyBaselineSig = JSON.stringify(buildDailyBlob());
-    },
-  },
 };
 
 async function syncBlobFile(name, attempt = 0) {
@@ -2244,7 +2387,9 @@ async function syncBlobFile(name, attempt = 0) {
 }
 
 async function syncFile(name, attempt = 0) {
-  return (name === 'roster' || name === 'log') ? syncItemFile(name, attempt) : syncBlobFile(name, attempt);
+  if (name === 'roster' || name === 'log') return syncItemFile(name, attempt);
+  if (name === 'daily') return syncDailyFile(attempt);
+  return syncBlobFile(name, attempt);
 }
 
 // ── Running the sync ─────────────────────────────────────
@@ -2256,6 +2401,7 @@ async function runSync(names) {
   _syncing = true;
   setSyncStatus('busy');
   checkDailyChanged();
+  stampDailyItemChanges();
   const todo = new Set([...(names || []), ..._dirty]);
   _dirty.clear();
   // Coverage totals are derived from the log, so the two always travel
@@ -2424,7 +2570,8 @@ async function restoreGithubBackup(date) {
 function initSync() {
   setRosterBaseline(getRoster());
   setLogBaseline(getLog());
-  _dailyBaselineSig = JSON.stringify(buildDailyBlob());
+  resetDailyItemBaseline();
+  _dailyBaselineSig = JSON.stringify(buildDailyGlobals());
   renderSyncPill();
   if (!syncOn()) return;
   runSync(SYNC_FILES);
@@ -2435,6 +2582,16 @@ function initSync() {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') runSync(SYNC_FILES); });
   setInterval(() => { if (document.visibilityState === 'visible') runSync(SYNC_FILES); }, POLL_MS);
   window.addEventListener('online', () => runSync(SYNC_FILES));
+  // Unlike roster/log/schedule/roomchart, absence/notes/outside-sub edits
+  // don't call touchBlob/markDirty themselves at the point of edit — so
+  // without this, a change could sit unpushed until the next full poll (up
+  // to a minute) or far longer if this tab isn't the visible one when that
+  // poll would have fired. This catches it within a few seconds instead.
+  setInterval(() => {
+    if (document.visibilityState !== 'visible') return;
+    stampDailyItemChanges();
+    checkDailyChanged();
+  }, 3000);
 }
 
 // ═══════════════════════════════════════════════════════
