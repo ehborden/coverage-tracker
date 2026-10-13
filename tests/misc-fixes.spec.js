@@ -210,4 +210,29 @@ test.describe('Misc regression fixes', () => {
     // Only a Coverage period that day: still out (so not pulled), nothing to cover
     expect(ranged.tuesday).toEqual([expect.objectContaining({ absentTeacher: 'Duty Teacher', absType: 'skip' })]);
   });
+  test('with "Senior classes ended" on, later days of a multi-day run leave 12th grade classes off too', async ({ page }) => {
+    await gotoApp(page);
+    const result = await page.evaluate(() => {
+      scheduleData = {
+        'Senior Teacher': [
+          { day: 'Tuesday', period: 1, courseName: 'English 12', section: 'ENG 12-1', room: '' },
+          { day: 'Tuesday', period: 2, courseName: 'English 11', section: 'ENG 11-2', room: '' },
+          { day: 'Wednesday', period: 1, courseName: 'English 12', section: 'ENG 12-1', room: '' },
+        ],
+      };
+      const base = [{ absentTeacher: 'Senior Teacher', period: 1, absType: 'normal' }];
+      localStorage.setItem('cs_senior_ended', '0');
+      const before = rowsForRangeDay(base, 'Tuesday').rows.map(r => r.period);
+      localStorage.setItem('cs_senior_ended', '1');
+      return {
+        before,
+        tuesday: rowsForRangeDay(base, 'Tuesday').rows.map(r => r.period),
+        wednesday: rowsForRangeDay(base, 'Wednesday').rows,
+      };
+    });
+    expect(result.before).toEqual([1, 2]);
+    expect(result.tuesday).toEqual([2]);
+    // Only a senior class that day: still out (so not pulled), nothing to cover
+    expect(result.wednesday).toEqual([expect.objectContaining({ absentTeacher: 'Senior Teacher', absType: 'skip' })]);
+  });
 });
