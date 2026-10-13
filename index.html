@@ -675,7 +675,7 @@
     <nav class="nav" id="nav-main" aria-label="Main navigation">
       <button class="nav-btn active" onclick="showScreen('run')">Run Coverage</button>
       <button class="nav-btn" onclick="showScreen('roster')">Roster</button>
-      <button class="nav-btn" onclick="showScreen('summary')">History</button>
+      <button class="nav-btn" onclick="showScreen('summary')">Log</button>
     </nav>
     <nav class="nav" id="nav-data" aria-label="Data navigation" style="opacity:0.85">
       <button class="nav-btn" onclick="showScreen('schedule')">Schedule</button>
@@ -739,14 +739,8 @@
             <option value="3">3</option>
           </select>
         </div>
-        <div>
-          <label>Senior Classes</label>
-          <label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer;font-size:13px">
-            <input type="checkbox" id="senior-classes-ended" onchange="saveSeniorClassesFlag()" />
-            Senior classes ended
-          </label>
-        </div>
       </div>
+      <div id="senior-note" style="display:none;margin-top:8px;font-size:12px;color:var(--amber)">Senior classes ended: 12th grade classes are skipped when adding absences. Change in Data → Settings.</div>
       <div id="outside-sub-avail-area"></div>
 
       <!-- Absences table -->
@@ -895,7 +889,7 @@
   <div id="screen-summary" class="screen">
     <div class="card">
       <div class="flex-between" style="margin-bottom:16px;gap:8px;flex-wrap:wrap">
-        <div class="card-title" style="margin:0">Coverage History</div>
+        <div class="card-title" style="margin:0">Coverage Log</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <input type="search" id="history-search" placeholder="Search teacher" aria-label="Search teacher" oninput="renderHistory()" style="width:200px;font-size:13px;padding:6px 10px" />
           <button class="btn btn-ghost btn-sm" onclick="renderHistory()">Refresh</button>
@@ -1201,7 +1195,11 @@
     <div class="modal-title" id="settings-modal-title">Settings</div>
     <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;text-transform:none;letter-spacing:0">
       <input type="checkbox" id="setting-show-tiers" onchange="setHistoryShowTiers(this.checked)" style="width:auto;margin-top:2px" />
-      <span><strong>Show tiers on History</strong><br><span style="color:var(--gray-600)">Adds the tier column and tier colors to the totals and weekly grid. Only affects this computer.</span></span>
+      <span><strong>Show tiers on Log</strong><br><span style="color:var(--gray-600)">Adds the tier column and tier colors to the totals and weekly grid. Only affects this computer.</span></span>
+    </label>
+    <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;text-transform:none;letter-spacing:0;margin-top:14px">
+      <input type="checkbox" id="senior-classes-ended" onchange="saveSeniorClassesFlag()" style="width:auto;margin-top:2px" />
+      <span><strong>Senior classes ended</strong><br><span style="color:var(--gray-600)">For spring, once seniors are done: their 12th grade classes start unchecked when adding an absence, so they don't get a sub. Shared with every synced computer. Start New Year turns it off.</span></span>
     </label>
     <div class="flex-end mt-20">
       <button class="btn btn-primary" onclick="closeSettingsModal()">Done</button>
@@ -1738,13 +1736,13 @@ async function initData() {
 // ═══════════════════════════════════════════════════════
 
 function showScreen(name) {
-  // The Log is a collapsible section on History now, so 'log' lands there
-  // with it opened.
+  // The detailed log is a collapsible section on the Log tab (screen-summary)
+  // now, so 'log' lands there with it opened.
   if (name === 'log') { name = 'summary'; setDetailedLogOpen(true); }
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('screen-' + name).classList.add('active');
-  // Main nav: run, roster, summary (History)
+  // Main nav: run, roster, summary (Log)
   const mainMap = { run:0, roster:1, summary:2 };
   if (mainMap[name] !== undefined)
     document.querySelectorAll('#nav-main .nav-btn')[mainMap[name]].classList.add('active');
@@ -4197,8 +4195,8 @@ function renderLog() {
   </tr>`).join('');
 }
 
-// ── History screen: search, tier toggle, Detailed Log ──
-// History is the old Summary and Log on one screen. The search box filters
+// ── Log tab (screen-summary): search, tier visibility, Detailed Log ──
+// The Log tab is the old Summary and Log screens on one page. The search box filters
 // all three parts at once (totals, weekly grid, detailed log); the log
 // matches a name as either the absent or the covering teacher.
 
@@ -4228,7 +4226,7 @@ function setDetailedLogOpen(open) {
   if (arrow) arrow.textContent = open ? '▾' : '▸';
 }
 
-// Tiers are hidden on History unless turned on in Data → Settings. A
+// Tiers are hidden on the Log tab unless turned on in Data → Settings. A
 // per-browser preference, remembered across reloads on this computer
 // only. Hidden tiers also mean no sorting by tier, since a list grouped
 // by tier would give them away anyway.
@@ -5533,6 +5531,7 @@ function startNewYear() {
   localStorage.setItem('cs_senior_ended', '0');
   const seniorBox = document.getElementById('senior-classes-ended');
   if (seniorBox) seniorBox.checked = false;
+  updateSeniorNote();
 
   renderLog();
   renderRoster();
@@ -6127,12 +6126,21 @@ function getRoomFromChart(classId, day, period) {
 function saveSeniorClassesFlag() {
   const val = document.getElementById('senior-classes-ended')?.checked;
   localStorage.setItem('cs_senior_ended', val ? '1' : '0');
+  updateSeniorNote();
 }
 
 function loadSeniorClassesFlag() {
   const val = localStorage.getItem('cs_senior_ended');
   const cb = document.getElementById('senior-classes-ended');
   if (cb && val !== null) cb.checked = val === '1';
+  updateSeniorNote();
+}
+
+// The checkbox lives in Data → Settings, out of sight, so Run Coverage
+// shows a one-line reminder whenever it's on.
+function updateSeniorNote() {
+  const note = document.getElementById('senior-note');
+  if (note) note.style.display = document.getElementById('senior-classes-ended')?.checked ? 'block' : 'none';
 }
 
 function loadRoomChartFromStorage() {
