@@ -177,4 +177,37 @@ test.describe('Misc regression fixes', () => {
     expect(text).toContain('<script>bad</script> Math');
     expect(text).toContain('Jane <b>Smith</b>');
   });
+  test('Coverage duty periods start unchecked in Add by Teacher and are left off later days of a multi-day run', async ({ page }) => {
+    await gotoApp(page);
+    await page.evaluate(() => {
+      scheduleData = {
+        'Duty Teacher': [
+          { day: 'Monday', period: 1, courseName: 'Algebra', section: 'MTH 9-1', room: '' },
+          { day: 'Monday', period: 2, courseName: 'Coverage', section: '', room: '' },
+          { day: 'Monday', period: 3, courseName: 'Duty', section: 'CVRG-3', room: '' },
+          { day: 'Tuesday', period: 4, courseName: 'Coverage', section: '', room: '' },
+        ],
+      };
+      document.getElementById('run-date').value = '2026-06-01'; // a Monday
+      openAddByTeacher();
+      document.getElementById('abt-teacher').value = 'Duty Teacher';
+      loadTeacherPeriods();
+    });
+    const boxes = await page.evaluate(() =>
+      [...document.querySelectorAll('.abt-period-check')].map(cb => ({ period: cb.dataset.period, checked: cb.checked })));
+    expect(boxes).toEqual([
+      { period: '1', checked: true },
+      { period: '2', checked: false },
+      { period: '3', checked: false },
+    ]);
+    await expect(page.locator('#abt-periods')).toContainText('Coverage period — skipped');
+
+    const ranged = await page.evaluate(() => ({
+      monday: rowsForRangeDay([{ absentTeacher: 'Duty Teacher', period: 1, absType: 'normal' }], 'Monday').rows,
+      tuesday: rowsForRangeDay([{ absentTeacher: 'Duty Teacher', period: 1, absType: 'normal' }], 'Tuesday').rows,
+    }));
+    expect(ranged.monday.map(r => r.period)).toEqual([1]);
+    // Only a Coverage period that day: still out (so not pulled), nothing to cover
+    expect(ranged.tuesday).toEqual([expect.objectContaining({ absentTeacher: 'Duty Teacher', absType: 'skip' })]);
+  });
 });
