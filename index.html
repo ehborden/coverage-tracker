@@ -4403,16 +4403,28 @@ function renderOverrideTable() {
   function buildOptions(period) {
     const available = [];
     const unavailable = [];
+    // Tier E gets its own group, and only the ones actually free this
+    // period: mixed in with everyone else they made the list hard to read,
+    // and one who isn't free can't cover anyway. "Keep current" is the
+    // default, so an existing Tier E pick never disappears from the row.
+    const emergency = [];
     const freed = new Set();
     allNames.forEach(name => {
       const t = roster.find(r => r.name === name);
       const avail = t ? (t.avail[dayName] instanceof Set ? t.avail[dayName] : new Set(t.avail[dayName] || [])) : new Set();
       if (chaperones.has(name)) { unavailable.push(name); return; }
-      if (avail.has(period)) available.push(name);
-      else if (gradeOutFreedClass(name, dayName, period, trip.gradesOut)) { available.push(name); freed.add(name); }
+      const isFree = avail.has(period);
+      const isFreed = !isFree && !!gradeOutFreedClass(name, dayName, period, trip.gradesOut);
+      if (t && t.tier === 'E') {
+        if (isFree || isFreed) { emergency.push(name); if (isFreed) freed.add(name); }
+        return;
+      }
+      if (isFree) available.push(name);
+      else if (isFreed) { available.push(name); freed.add(name); }
       else unavailable.push(name);
     });
     available.sort();
+    emergency.sort();
     unavailable.sort();
     const busyThisPeriod = alreadyCovering[period] || new Set();
 
@@ -4435,10 +4447,17 @@ function renderOverrideTable() {
       opts += `<optgroup label="Available Period ${period}">`;
       opts += available.map(n => {
         const busy = busyThisPeriod.has(n);
-        const rt = roster.find(r => r.name === n);
-        const emg = rt && rt.tier === 'E' ? ' · emergency only' : '';
         const fr = freed.has(n) ? ' · free from grade out' : '';
-        return `<option value="${esc(n)}" ${busy ? 'style="color:var(--red)"' : ''}>${esc(n)}${emg}${fr}${busy ? ' — already assigned' : ''}</option>`;
+        return `<option value="${esc(n)}" ${busy ? 'style="color:var(--red)"' : ''}>${esc(n)}${fr}${busy ? ' — already assigned' : ''}</option>`;
+      }).join('');
+      opts += '</optgroup>';
+    }
+    if (emergency.length) {
+      opts += `<optgroup label="Emergency Only (Tier E), free Period ${period}">`;
+      opts += emergency.map(n => {
+        const busy = busyThisPeriod.has(n);
+        const fr = freed.has(n) ? ' · free from grade out' : '';
+        return `<option value="${esc(n)}" ${busy ? 'style="color:var(--red)"' : ''}>${esc(n)}${fr}${busy ? ' — already assigned' : ''}</option>`;
       }).join('');
       opts += '</optgroup>';
     }
