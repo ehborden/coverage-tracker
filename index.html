@@ -780,7 +780,7 @@
               <th><span class="sr-only">Actions</span></th>
             </tr>
           </thead>
-          <tbody id="absences-tbody"></tbody>
+          <tbody id="absences-tbody" onchange="renderTripPanel()"></tbody>
         </table>
       </div>
 
@@ -5152,6 +5152,7 @@ function confirmAddByTeacher() {
   });
 
   closeAddByTeacher();
+  renderTripPanel();
 }
 
 function addAbsenceRowWithData(teacher, period, course, section, room, noCoverage, absType) {
@@ -5241,6 +5242,7 @@ function removeAbsenceRow(btn) {
 
   tr.remove();
   if (dateStr) saveAbsencesForDate(dateStr);
+  renderTripPanel();
 }
 
 function showImportAlert(type, msg) {
@@ -6268,14 +6270,7 @@ function renderTripPanel() {
     });
     notes.push(`${label} out: ${freed} teacher period${freed !== 1 ? 's' : ''} freed up for coverage (picked after regular free periods when fairness is otherwise close). Absent teachers' ${label.toLowerCase()} classes need no coverage.`);
   }
-  trip.chaperones.forEach(n => {
-    const stillMeet = (scheduleData[n] || [])
-      .filter(c => c.day === dayName && !(trip.gradesOut.length && classAllInGrades(c, trip.gradesOut)))
-      .sort((a, b) => a.period - b.period);
-    if (stillMeet.length) {
-      notes.push(`${n} still has ${stillMeet.map(c => `P${c.period} ${c.section || c.courseName}`).join(', ')} today. Add an absence if those classes need coverage.`);
-    }
-  });
+  const warnings = tripWarnings(dateStr);
 
   area.innerHTML = `<div class="trip-panel" style="border:1px solid var(--gray-200);border-radius:6px;padding:10px 12px;margin-top:12px">
     <div style="font-weight:600;font-size:13px;margin-bottom:8px">Grade Out / Field Trip</div>
@@ -6294,7 +6289,86 @@ function renderTripPanel() {
       </div>
     </div>
     ${notes.length ? `<div id="trip-notes" style="margin-top:8px;font-size:12px;color:var(--gray-600)">${notes.map(n => `<div>${esc(n)}</div>`).join('')}</div>` : ''}
+    ${warnings.length ? `<div id="trip-warnings" role="alert" style="margin-top:8px;padding:8px 10px;border-radius:6px;background:var(--amber-light);color:var(--amber);font-size:12px">
+      ${warnings.map(w => `<div style="margin:2px 0">${esc(w.text)}</div>`).join('')}
+      ${warnings.some(w => w.kind === 'stale') ? '<button type="button" class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="removeTripStaleAssignments()">Remove those assignments</button>' : ''}
+    </div>` : ''}
   </div>`;
+}
+
+// Things that are easy to miss once a grade out or chaperone is set,
+// especially after coverage has already been run for the date:
+//   stale      a sub already assigned to a class that's now on the trip
+//   covering   a chaperone already assigned to cover someone
+//   uncovered  a chaperone class that still meets, with no absence row
+function tripWarnings(dateStr) {
+  const trip = getTripDay(dateStr);
+  if (!trip.gradesOut.length && !trip.chaperones.length) return [];
+  const dayName = tripDayName(dateStr);
+  const warnings = [];
+  const dayLog = getLog().filter(e => e.date === dateStr);
+
+  tripStaleEntries(dateStr).forEach(e => {
+    const cls = e.sectionNumber || e.courseName || '';
+    const who = isUnassigned(e.coveringTeacher) ? 'still listed as unassigned' : `covered by ${e.coveringTeacher}`;
+    warnings.push({ kind: 'stale', text: `${e.absentTeacher} P${e.period}${cls ? ' ' + cls : ''} is ${who}, but that grade is out. No coverage needed.` });
+  });
+
+  const chaperones = new Set(trip.chaperones);
+  dayLog.forEach(e => {
+    const ct = (e.coveringTeacher || '').replace(' (Emergency)', '').trim();
+    if (chaperones.has(ct)) {
+      warnings.push({ kind: 'covering', text: `${ct} is a chaperone but is assigned to cover ${e.absentTeacher} P${e.period}. Click Assign Coverage to replace them.` });
+    }
+  });
+
+  const absentRows = dateStr === currentAbsenceDate
+    ? getAbsences().map(a => `${a.absentTeacher}||${a.period}`)
+    : engineAbsencesFromStorage(getAbsencesByDate(dateStr)).map(a => `${a.absentTeacher}||${a.period}`);
+  const hasRow = new Set(absentRows);
+  trip.chaperones.forEach(n => {
+    const missing = (scheduleData[n] || [])
+      .filter(c => c.day === dayName && !(trip.gradesOut.length && classAllInGrades(c, trip.gradesOut)))
+      .filter(c => !hasRow.has(`${n}||${c.period}`))
+      .sort((a, b) => a.period - b.period);
+    if (missing.length) {
+      warnings.push({ kind: 'uncovered', text: `${n} still has ${missing.map(c => `P${c.period} ${c.section || c.courseName}`).join(', ')} today with no absence row. Add one if those classes need a sub.` });
+    }
+  });
+  return warnings;
+}
+
+// Log entries for this date whose class is entirely in a grade that's out.
+function tripStaleEntries(dateStr) {
+  const trip = getTripDay(dateStr);
+  if (!trip.gradesOut.length) return [];
+  const dayName = tripDayName(dateStr);
+  return getLog().filter(e => {
+    if (e.date !== dateStr) return false;
+    if (e.sectionNumber || e.courseName) return classAllInGrades({ section: e.sectionNumber, courseName: e.courseName }, trip.gradesOut);
+    const sched = scheduledClassFor(e.absentTeacher, dayName, e.period);
+    return !!(sched && typeof sched === 'object' && classAllInGrades(sched, trip.gradesOut));
+  });
+}
+
+// Removes the stale assignments and turns their absence rows into
+// "no coverage" rows, so the teacher still counts as out (and can't be
+// pulled) but the class isn't reassigned on the next run.
+function removeTripStaleAssignments() {
+  const dateStr = document.getElementById('run-date').value;
+  if (!dateStr) return;
+  const stale = tripStaleEntries(dateStr);
+  if (!stale.length) return;
+  if (!confirm(`Remove ${stale.length} assignment${stale.length !== 1 ? 's' : ''} for classes whose grade is out?`)) return;
+  if (dateStr === currentAbsenceDate) saveAbsencesForDate(dateStr);
+  pushUndoSnapshot(`Remove grade-out assignments (${dateStr})`);
+  const keys = new Set(stale.map(e => `${e.absentTeacher}||${e.period}`));
+  stale.forEach(e => removeCoverageEntry(dateStr, e.absentTeacher, e.period));
+  const absences = getAbsencesByDate(dateStr).map(a =>
+    keys.has(`${a.teacher}||${a.period}`) ? { ...a, absType: 'skip', noCoverage: true } : a);
+  setData('cs_absences_' + dateStr, absences);
+  if (dateStr === currentAbsenceDate) renderAbsencesTable(); // re-renders this panel too
+  refreshOutputIfShowingDate(dateStr);
 }
 
 function toggleGradeOut(grade, on) {
