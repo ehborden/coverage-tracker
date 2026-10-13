@@ -22,6 +22,7 @@ const MODALS = [
   { open: 'openTeacherModal', close: 'closeTeacherModal', id: 'teacher-modal' },
   { open: 'openAddByTeacher', close: 'closeAddByTeacher', id: 'add-by-teacher-modal' },
   { open: 'openResetModal', close: 'closeResetModal', id: 'reset-modal' },
+  { open: 'openTripModal', close: 'closeTripModal', id: 'trip-modal' },
 ];
 
 async function scanAndAssert(page, label, root = 'document') {

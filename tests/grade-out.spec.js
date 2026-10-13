@@ -141,6 +141,7 @@ test.describe('Grade Out / Field Trip', () => {
       onDateChange();
     }, MONDAY);
 
+    await page.locator('#trip-btn').click();
     await page.selectOption('#trip-chaperone-select', 'Tenth Teacher');
     await page.getByRole('button', { name: 'Add as chaperone' }).click();
     await expect(page.locator('#trip-chaperone-list')).toContainText('Tenth Teacher');
@@ -200,6 +201,7 @@ test.describe('Grade Out / Field Trip', () => {
     await page.evaluate(() => runCoverage());
     expect(await page.evaluate(() => getLog().map(e => e.coveringTeacher))).toEqual(['Chaperone Free']);
 
+    await page.locator('#trip-btn').click();
     await page.locator('.trip-grade-check[data-grade="9"]').check();
     await expect(page.locator('#trip-warnings')).toContainText('Absent Ninth P3 ENG 9-1 is covered by Chaperone Free, but that grade is out');
 
@@ -223,6 +225,7 @@ test.describe('Grade Out / Field Trip', () => {
     await page.evaluate(() => runCoverage());
     expect(await page.evaluate(() => getLog()[0].coveringTeacher)).toBe('Chaperone Free');
 
+    await page.locator('#trip-btn').click();
     await page.selectOption('#trip-chaperone-select', 'Chaperone Free');
     await page.getByRole('button', { name: 'Add as chaperone' }).click();
     await expect(page.locator('#trip-warnings')).toContainText('Chaperone Free is a chaperone but is assigned to cover Absent Teacher P3');
@@ -241,5 +244,24 @@ test.describe('Grade Out / Field Trip', () => {
     await expect(page.locator('#trip-warnings')).toContainText('Tenth Teacher still has P3 HIS 10-2 today with no absence row');
     await page.locator('#absences-tbody .abs-course').first().dispatchEvent('change');
     await expect(page.locator('#trip-area')).not.toContainText('with no absence row');
+  });
+  test('the Field Trip button stays plain on a normal day, and says what is set (and when something needs a look) once a trip is entered', async ({ page }) => {
+    page.on('dialog', d => d.accept());
+    await gotoApp(page);
+    await seedGradeOutDay(page);
+    await enterAbsence(page, MONDAY, 'Absent Ninth', 3, 'English 9', 'ENG 9-1');
+    await expect(page.locator('#trip-btn')).toHaveText('Field Trip');
+    await expect(page.locator('#trip-modal')).not.toHaveClass(/open/);
+
+    await page.evaluate(() => runCoverage());
+    await page.locator('#trip-btn').click();
+    await page.locator('.trip-grade-check[data-grade="9"]').check();
+    await page.getByRole('button', { name: 'Done' }).click();
+    await expect(page.locator('#trip-modal')).not.toHaveClass(/open/);
+    await expect(page.locator('#trip-btn')).toHaveText('Field Trip: Grade 9 out · 1 warning');
+
+    // Another date with nothing set goes back to plain
+    await page.evaluate(() => { document.getElementById('run-date').value = '2026-06-02'; onDateChange(); });
+    await expect(page.locator('#trip-btn')).toHaveText('Field Trip');
   });
 });

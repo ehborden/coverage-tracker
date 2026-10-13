@@ -711,6 +711,7 @@
       <div class="flex-between">
         <div class="card-title">Run Coverage</div>
         <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" id="trip-btn" onclick="openTripModal()">Field Trip</button>
           <button class="btn btn-ghost btn-sm" onclick="showScreen('override')">Override</button>
           <button class="btn btn-danger btn-sm" onclick="openResetModal()">↩ Reset Day</button>
         </div>
@@ -744,7 +745,6 @@
         </div>
       </div>
       <div id="outside-sub-avail-area"></div>
-      <div id="trip-area"></div>
 
       <!-- Absences table -->
       <div class="flex-between mt-16" style="margin-bottom:10px">
@@ -1187,6 +1187,16 @@
     <div class="flex-end mt-20">
       <button class="btn btn-ghost" onclick="closeResetModal()">Cancel</button>
       <button class="btn btn-danger" onclick="confirmReset()">Reset This Day</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="trip-modal">
+  <div class="modal" style="max-width:640px" role="dialog" aria-modal="true" aria-labelledby="trip-modal-title">
+    <div class="modal-title" id="trip-modal-title">Grade Out / Field Trip <span id="trip-modal-date" style="font-weight:400;font-size:14px;color:var(--gray-600)"></span></div>
+    <div id="trip-area"></div>
+    <div class="flex-end mt-20">
+      <button class="btn btn-primary" onclick="closeTripModal()">Done</button>
     </div>
   </div>
 </div>
@@ -6240,7 +6250,7 @@ function renderTripPanel() {
   const area = document.getElementById('trip-area');
   if (!area) return;
   const dateStr = document.getElementById('run-date').value;
-  if (!dateStr) { area.innerHTML = ''; return; }
+  if (!dateStr) { area.innerHTML = ''; updateTripButton(null); return; }
   const trip = getTripDay(dateStr);
   const dayName = tripDayName(dateStr);
 
@@ -6272,8 +6282,11 @@ function renderTripPanel() {
   }
   const warnings = tripWarnings(dateStr);
 
-  area.innerHTML = `<div class="trip-panel" style="border:1px solid var(--gray-200);border-radius:6px;padding:10px 12px;margin-top:12px">
-    <div style="font-weight:600;font-size:13px;margin-bottom:8px">Grade Out / Field Trip</div>
+  updateTripButton(dateStr, trip, warnings);
+  const dateLabel = document.getElementById('trip-modal-date');
+  if (dateLabel) dateLabel.textContent = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'numeric', day: 'numeric' });
+
+  area.innerHTML = `<div class="trip-panel">
     <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
       <div>
         <div style="font-size:12px;color:var(--gray-600);margin-bottom:4px">Whole grade out</div>
@@ -6295,6 +6308,29 @@ function renderTripPanel() {
     </div>` : ''}
   </div>`;
 }
+
+// The panel lives in a modal, opened from the Field Trip button next to
+// Override. Since it's out of sight, the button itself says when the date
+// has a trip set, and turns amber when there's something to look at.
+function updateTripButton(dateStr, trip, warnings) {
+  const btn = document.getElementById('trip-btn');
+  if (!btn) return;
+  const parts = [];
+  if (trip && trip.gradesOut.length) parts.push((trip.gradesOut.length === 1 ? 'Grade ' : 'Grades ') + trip.gradesOut.join(', ') + ' out');
+  if (trip && trip.chaperones.length) parts.push(`${trip.chaperones.length} chaperone${trip.chaperones.length !== 1 ? 's' : ''}`);
+  const nWarn = warnings ? warnings.length : 0;
+  if (nWarn) parts.push(`${nWarn} warning${nWarn !== 1 ? 's' : ''}`);
+  btn.textContent = parts.length ? 'Field Trip: ' + parts.join(' · ') : 'Field Trip';
+  btn.style.background = nWarn ? 'var(--amber-light)' : '';
+  btn.style.color = nWarn ? 'var(--amber)' : '';
+}
+
+function openTripModal() {
+  if (!document.getElementById('run-date').value) { alert('Please select a date.'); return; }
+  renderTripPanel();
+  document.getElementById('trip-modal').classList.add('open');
+}
+function closeTripModal() { document.getElementById('trip-modal').classList.remove('open'); }
 
 // Things that are easy to miss once a grade out or chaperone is set,
 // especially after coverage has already been run for the date:
