@@ -2609,6 +2609,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderAbsencesTable();
   renderRoster();
   initSync();
+
+  // Before this, an absence row only ever saved to storage at specific
+  // checkpoints (switching dates, Assign Coverage, closing the tab) — so a
+  // row you just typed into existed only on-screen until one of those
+  // happened. If a sync pull landed in that window, it read storage as it
+  // was before you typed anything and could overwrite it with no warning.
+  // One delegated listener on the table covers every row, current and
+  // future, without each row needing its own wiring.
+  let _absenceAutoSaveTimer = null;
+  const scheduleAbsenceAutoSave = () => {
+    clearTimeout(_absenceAutoSaveTimer);
+    _absenceAutoSaveTimer = setTimeout(() => {
+      const dateStr = document.getElementById('run-date')?.value;
+      if (dateStr) saveAbsencesForDate(dateStr);
+    }, 400);
+  };
+  const absencesTbody = document.getElementById('absences-tbody');
+  absencesTbody.addEventListener('input', scheduleAbsenceAutoSave);
+  absencesTbody.addEventListener('change', scheduleAbsenceAutoSave);
 });
 
 // ═══════════════════════════════════════════════════════

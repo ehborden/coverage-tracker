@@ -8,6 +8,29 @@ test.describe('Misc regression fixes', () => {
     expect(options).toEqual(['1', '2', '3', '4', '5', '6', '7']);
   });
 
+  test('typing into an absence row saves it to storage immediately, not only at a date switch, Assign Coverage, or closing the tab', async ({ page }) => {
+    await gotoApp(page);
+    await page.evaluate(() => {
+      document.getElementById('run-date').value = '2026-06-01';
+      renderAbsencesTable();
+    });
+
+    // Real UI interactions (not page.evaluate setting .value directly) so
+    // this exercises the actual input/change listeners, the same way a
+    // person typing would — no date switch, no Assign Coverage, no reload.
+    await page.selectOption('#absences-tbody .abs-teacher', '__custom__');
+    await page.fill('#absences-tbody .abs-teacher-custom', 'Jane Smith');
+    await page.fill('#absences-tbody .abs-course', 'Math');
+
+    // Give the debounce (400ms) a moment, nothing else.
+    await page.waitForTimeout(600);
+
+    const saved = await page.evaluate(() => getAbsencesByDate('2026-06-01'));
+    expect(saved).toHaveLength(1);
+    expect(saved[0].teacher).toBe('Jane Smith');
+    expect(saved[0].course).toBe('Math');
+  });
+
   test('getWeekBounds returns the correct Mon-Fri window regardless of timezone', async ({ page }) => {
     await gotoApp(page);
     const bounds = await page.evaluate(() => getWeekBounds('2026-06-03')); // a Wednesday
