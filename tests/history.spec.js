@@ -14,7 +14,7 @@ async function seedHistory(page) {
       { date: '2026-06-02', absentTeacher: 'Jane Smith', period: 2, courseName: 'Art', coveringTeacher: 'Bob Jones' },
       { date: '2026-06-03', absentTeacher: 'Carl Moss', period: 3, courseName: 'Gym', coveringTeacher: 'Bob Jones' },
     ]);
-    try { localStorage.removeItem('cs_history_hide_tiers'); } catch {}
+    try { localStorage.removeItem('cs_history_show_tiers'); } catch {}
     showScreen('summary');
   });
 }
@@ -49,21 +49,24 @@ test.describe('History screen', () => {
     await expect(page.locator('#summary-tbody')).toContainText('No teacher matches that name.');
   });
 
-  test('Hide tiers removes the tier column and colors, stops tier ordering, and is remembered', async ({ page }) => {
+  test('tiers are hidden on History by default, with no toggle on the page, and Settings turns them on (remembered)', async ({ page }) => {
     await gotoApp(page);
     await seedHistory(page);
-    await expect(page.locator('#summary-tbody tr').first()).toContainText('Jane Smith'); // tier order: 1, 2, 3
-
-    await page.getByRole('button', { name: 'Hide tiers' }).click();
+    await expect(page.locator('#screen-summary').getByRole('button', { name: /tiers/i })).toHaveCount(0);
     await expect(page.locator('#summary-tbody .tier-col').first()).toBeHidden();
     await expect(page.locator('#weekly-grid-body .tier-col').first()).toBeHidden();
     const bg = await page.locator('#summary-tbody tr').first().evaluate(el => getComputedStyle(el).backgroundColor);
     expect(bg).toBe('rgba(0, 0, 0, 0)');
-    await expect(page.locator('#summary-tbody tr').first()).toContainText('Amy Lee'); // alphabetical now
+    await expect(page.locator('#summary-tbody tr').first()).toContainText('Amy Lee'); // alphabetical, not by tier
+
+    await page.locator('#data-menu-btn').click();
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByLabel(/Show tiers on History/).check();
+    await page.locator('#settings-modal').getByRole('button', { name: 'Done' }).click();
+    await expect(page.locator('#summary-tbody .tier-col').first()).toBeVisible();
 
     await page.reload();
     await page.evaluate(() => showScreen('summary'));
-    await expect(page.getByRole('button', { name: 'Show tiers' })).toBeVisible();
-    await expect(page.locator('#summary-tbody .tier-col').first()).toBeHidden();
+    await expect(page.locator('#summary-tbody .tier-col').first()).toBeVisible();
   });
 });
