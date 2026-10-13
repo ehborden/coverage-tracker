@@ -8,6 +8,71 @@ test.describe('Misc regression fixes', () => {
     expect(options).toEqual(['1', '2', '3', '4', '5', '6', '7']);
   });
 
+  test('typing into an absence row saves it to storage immediately, not only at a date switch, Assign Coverage, or closing the tab', async ({ page }) => {
+    await gotoApp(page);
+    await page.evaluate(() => {
+      document.getElementById('run-date').value = '2026-06-01';
+      renderAbsencesTable();
+    });
+
+    // Real UI interactions (not page.evaluate setting .value directly) so
+    // this exercises the actual input/change listeners, the same way a
+    // person typing would — no date switch, no Assign Coverage, no reload.
+    await page.selectOption('#absences-tbody .abs-teacher', '__custom__');
+    await page.fill('#absences-tbody .abs-teacher-custom', 'Jane Smith');
+    await page.fill('#absences-tbody .abs-course', 'Math');
+
+    // Give the debounce (400ms) a moment, nothing else.
+    await page.waitForTimeout(600);
+
+    const saved = await page.evaluate(() => getAbsencesByDate('2026-06-01'));
+    expect(saved).toHaveLength(1);
+    expect(saved[0].teacher).toBe('Jane Smith');
+    expect(saved[0].course).toBe('Math');
+  });
+
+  test('a sync-driven refresh replaces a blank placeholder row with real data even if that row merely has focus, not actually been typed into', async ({ page }) => {
+    await gotoApp(page);
+    await page.evaluate(() => {
+      document.getElementById('run-date').value = '2026-06-01';
+      renderAbsencesTable(); // nothing stored yet — shows one blank placeholder row
+    });
+
+    // Focus the placeholder's teacher dropdown — focused, but nothing
+    // selected or typed. This used to be enough to block a sync refresh.
+    await page.focus('#absences-tbody .abs-teacher');
+
+    // Simulate a sync pull landing with real data for this date.
+    await page.evaluate(() => {
+      setData('cs_absences_2026-06-01', [{ teacher: 'Jane Smith', period: 1, course: 'Math' }]);
+      refreshAbsencesTableIfShowing();
+    });
+
+    const text = await page.locator('#absences-tbody').textContent();
+    expect(text).toContain('Jane Smith');
+  });
+
+  test('a sync-driven refresh does not clobber a row genuinely being typed into', async ({ page }) => {
+    await gotoApp(page);
+    await page.evaluate(() => {
+      document.getElementById('run-date').value = '2026-06-01';
+      renderAbsencesTable();
+    });
+
+    await page.selectOption('#absences-tbody .abs-teacher', '__custom__');
+    await page.fill('#absences-tbody .abs-teacher-custom', 'Bob Jones');
+
+    // A sync refresh arrives mid-edit, before the 400ms autosave debounce
+    // has saved this row — it must not blow away what's on screen.
+    await page.evaluate(() => {
+      setData('cs_absences_2026-06-01', [{ teacher: 'Someone Else', period: 2, course: 'Science' }]);
+      refreshAbsencesTableIfShowing();
+    });
+
+    const customValue = await page.inputValue('#absences-tbody .abs-teacher-custom');
+    expect(customValue).toBe('Bob Jones');
+  });
+
   test('getWeekBounds returns the correct Mon-Fri window regardless of timezone', async ({ page }) => {
     await gotoApp(page);
     const bounds = await page.evaluate(() => getWeekBounds('2026-06-03')); // a Wednesday
