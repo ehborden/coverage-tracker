@@ -2195,10 +2195,20 @@ function applyDailyGlobals(data) {
   loadSeniorClassesFlag();
 }
 
+// Set whenever a real input/change fires inside the absences table (see
+// the DOMContentLoaded listener below), cleared whenever the table gets
+// freshly loaded. A field merely having focus isn't enough to skip a
+// sync-driven refresh — someone can click into a brand-new blank row
+// without having typed anything yet, and a stale "something's focused"
+// check would then block the real synced data from ever appearing,
+// leaving a blank row on screen that the very next keystroke would save
+// over the real data sitting underneath it in storage.
+let _absencesTableDirty = false;
+
 function refreshAbsencesTableIfShowing() {
   if (document.getElementById('screen-run')?.classList.contains('active')) {
-    const a = document.activeElement;
-    if (!(a && ['INPUT', 'TEXTAREA', 'SELECT'].includes(a.tagName) && a.closest('#absences-tbody'))) renderAbsencesTable();
+    if (_absencesTableDirty) return;
+    renderAbsencesTable();
   }
 }
 
@@ -2642,6 +2652,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderAbsencesTable();
   renderRoster();
   initSync();
+
+  // Before this, an absence row only ever saved to storage at specific
+  // checkpoints (switching dates, Assign Coverage, closing the tab) — so a
+  // row you just typed into existed only on-screen until one of those
+  // happened. If a sync pull landed in that window, it read storage as it
+  // was before you typed anything and could overwrite it with no warning.
+  // One delegated listener on the table covers every row, current and
+  // future, without each row needing its own wiring.
+  let _absenceAutoSaveTimer = null;
+  const scheduleAbsenceAutoSave = () => {
+    _absencesTableDirty = true;
+    clearTimeout(_absenceAutoSaveTimer);
+    _absenceAutoSaveTimer = setTimeout(() => {
+      const dateStr = document.getElementById('run-date')?.value;
+      if (dateStr) saveAbsencesForDate(dateStr);
+      _absencesTableDirty = false;
+    }, 400);
+  };
+  const absencesTbody = document.getElementById('absences-tbody');
+  absencesTbody.addEventListener('input', scheduleAbsenceAutoSave);
+  absencesTbody.addEventListener('change', scheduleAbsenceAutoSave);
 });
 
 // ═══════════════════════════════════════════════════════
@@ -2676,6 +2707,7 @@ function saveAbsencesForDate(dateStr) {
 function loadAbsencesForDate(dateStr) {
   const tbody = document.getElementById('absences-tbody');
   tbody.innerHTML = '';
+  _absencesTableDirty = false;
   const saved = getAbsencesByDate(dateStr);
   if (saved.length > 0) {
     saved.forEach(a => addAbsenceRowWithData(a.teacher, a.period, a.course, a.section, a.room, a.noCoverage, a.absType));
