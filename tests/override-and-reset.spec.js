@@ -504,4 +504,31 @@ test.describe('Override and Reset Day', () => {
     await page.evaluate(() => { renderAbsencesTable(); runCoverage(); });
     expect(await page.evaluate(() => getLog().length)).toBe(0);
   });
+  test('Tier E people get their own dropdown group, and only the ones free that period are listed', async ({ page }) => {
+    await gotoApp(page);
+    await page.evaluate(() => {
+      const t = (id, name, tier, mon) => ({ id, name, tier, highAvail: false, excluded: false,
+        avail: { Monday: mon, Tuesday: [], Wednesday: [], Thursday: [], Friday: [] },
+        lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0 });
+      setRoster([
+        t('t1', 'Regular Free', '1', [1]),
+        t('t2', 'Regular Busy', '1', []),
+        t('t3', 'Emergency Free', 'E', [1]),
+        t('t4', 'Emergency Busy', 'E', []),
+      ]);
+      setLog([{ date: '2026-06-01', absentTeacher: 'Absent', period: 1, courseName: 'Math', coveringTeacher: 'Regular Free' }]);
+      document.getElementById('override-date').value = '2026-06-01';
+      loadOverrideEntries();
+      renderOverrideTable();
+    });
+    const groups = await page.evaluate(() =>
+      [...document.querySelectorAll('#override-new-0 optgroup')].map(g => ({
+        label: g.label, names: [...g.querySelectorAll('option')].map(o => o.value),
+      })));
+    expect(groups).toEqual([
+      { label: 'Available Period 1', names: ['Regular Free'] },
+      { label: 'Emergency Only (Tier E), free Period 1', names: ['Emergency Free'] },
+      { label: 'All Others', names: ['Regular Busy'] },
+    ]);
+  });
 });
