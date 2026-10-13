@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const { gotoApp } = require('./helpers');
 
-// History is the old Summary and Log screens on one page: per-teacher
+// The Log tab is the old Summary and Log screens on one page: per-teacher
 // totals, the weekly grid, and a collapsed Detailed Log underneath.
 async function seedHistory(page) {
   await page.evaluate(() => {
@@ -19,11 +19,11 @@ async function seedHistory(page) {
   });
 }
 
-test.describe('History screen', () => {
-  test('the Log tab is gone, and the log sits collapsed at the bottom of History', async ({ page }) => {
+test.describe('Log tab (old Summary + Log)', () => {
+  test('the Log tab is gone, and the detailed log sits collapsed at the bottom of the Log tab', async ({ page }) => {
     await gotoApp(page);
     await seedHistory(page);
-    await expect(page.locator('#nav-main .nav-btn')).toHaveText(['Run Coverage', 'Roster', 'History']);
+    await expect(page.locator('#nav-main .nav-btn')).toHaveText(['Run Coverage', 'Roster', 'Log']);
     await expect(page.locator('#detailed-log-body')).toBeHidden();
     await expect(page.locator('#detailed-log-toggle')).toContainText('(3)');
 
@@ -49,7 +49,7 @@ test.describe('History screen', () => {
     await expect(page.locator('#summary-tbody')).toContainText('No teacher matches that name.');
   });
 
-  test('tiers are hidden on History by default, with no toggle on the page, and Settings turns them on (remembered)', async ({ page }) => {
+  test('tiers are hidden on the Log tab by default, with no toggle on the page, and Settings turns them on (remembered)', async ({ page }) => {
     await gotoApp(page);
     await seedHistory(page);
     await expect(page.locator('#screen-summary').getByRole('button', { name: /tiers/i })).toHaveCount(0);
@@ -61,12 +61,29 @@ test.describe('History screen', () => {
 
     await page.locator('#data-menu-btn').click();
     await page.getByRole('button', { name: 'Settings' }).click();
-    await page.getByLabel(/Show tiers on History/).check();
+    await page.getByLabel(/Show tiers on Log/).check();
     await page.locator('#settings-modal').getByRole('button', { name: 'Done' }).click();
     await expect(page.locator('#summary-tbody .tier-col').first()).toBeVisible();
 
     await page.reload();
     await page.evaluate(() => showScreen('summary'));
     await expect(page.locator('#summary-tbody .tier-col').first()).toBeVisible();
+  });
+  test('"Senior classes ended" lives in Settings, and Run Coverage shows a reminder only while it is on', async ({ page }) => {
+    await gotoApp(page);
+    await page.evaluate(() => showScreen('run'));
+    await expect(page.locator('#screen-run #senior-classes-ended')).toHaveCount(0);
+    await expect(page.locator('#senior-note')).toBeHidden();
+
+    await page.locator('#data-menu-btn').click();
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByLabel(/Senior classes ended/).check();
+    await page.locator('#settings-modal').getByRole('button', { name: 'Done' }).click();
+    await expect(page.locator('#senior-note')).toBeVisible();
+    expect(await page.evaluate(() => localStorage.getItem('cs_senior_ended'))).toBe('1');
+
+    await page.reload();
+    await page.waitForSelector('#run-date');
+    await expect(page.locator('#senior-note')).toBeVisible();
   });
 });
