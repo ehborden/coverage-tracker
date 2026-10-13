@@ -2960,6 +2960,7 @@ function teacherSubjects(teacherName) {
 // all, so a real day off can't be confused with a teacher who's simply
 // missing from what's loaded.
 function rowsForRangeDay(baseAbsences, dayName) {
+  const seniorsEnded = localStorage.getItem('cs_senior_ended') === '1';
   const unmatched = [];
   const rows = [];
   const teachers = [...new Set(
@@ -2974,8 +2975,11 @@ function rowsForRangeDay(baseAbsences, dayName) {
       });
       return;
     }
-    // Coverage duty periods aren't classes and never need a sub
-    const dayClasses = classes.filter(c => c.day === dayName && !isCoverageSlot(c));
+    // Coverage duty periods aren't classes and never need a sub. Neither
+    // does a 12th grade class once "Senior classes ended" is on (Settings),
+    // same as Add by Teacher leaves them unchecked on day one.
+    const dayClasses = classes.filter(c => c.day === dayName && !isCoverageSlot(c)
+      && !(seniorsEnded && classAllInGrades(c, ['12'])));
     if (dayClasses.length === 0) {
       const sample = baseAbsences.find(a => a.absentTeacher === teacher);
       rows.push({ absentTeacher: teacher, period: sample.period, courseName: '', sectionNumber: '', roomNumber: '', absType: 'skip' });
