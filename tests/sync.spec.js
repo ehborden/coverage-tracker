@@ -220,4 +220,106 @@ test.describe('GitHub sync', () => {
 
     expect(await page.evaluate(() => getRoster().map(t => t.name))).toEqual(['Zoe']);
   });
+
+  test('absences entered for different dates on two devices both survive, instead of whichever syncs last wiping every other date', async ({ page, browser }) => {
+    const store = makeGithubStore();
+    page.on('dialog', d => d.accept());
+
+    // Device A: an absence on June 1.
+    await installGithubMock(page.context(), store);
+    await gotoApp(page);
+    await page.evaluate(() => {
+      setData('cs_absences_2026-06-01', [{ teacher: 'Jane Smith', period: 1, course: 'Math' }]);
+    });
+    await connectDeviceToSync(page, { token: 'tok' });
+    await waitForSyncIdle(page);
+
+    // Device B: a second computer, with its own absence on a *different*
+    // date (June 8), entered before it ever talks to GitHub — a genuine
+    // two-sided merge across dates, not B just adopting A's state.
+    const contextB = await browser.newContext();
+    const pageB = await contextB.newPage();
+    pageB.on('dialog', d => d.accept());
+    await installGithubMock(contextB, store);
+    await gotoApp(pageB);
+    await pageB.evaluate(() => {
+      setData('cs_absences_2026-06-08', [{ teacher: 'Bob Jones', period: 3, course: 'Science' }]);
+    });
+    await connectDeviceToSync(pageB, { token: 'tok' });
+    await waitForSyncIdle(pageB);
+
+    // B should see both dates, not just its own — the old whole-blob
+    // overwrite would have wiped June 1 the moment B pushed.
+    const onB = await pageB.evaluate(() => ({
+      jun1: getAbsencesByDate('2026-06-01'),
+      jun8: getAbsencesByDate('2026-06-08'),
+    }));
+    expect(onB.jun1).toHaveLength(1);
+    expect(onB.jun8).toHaveLength(1);
+
+    // A syncs again and should pick up June 8 without losing its own June 1.
+    await page.evaluate(() => runSync(['daily']));
+    await waitForSyncIdle(page);
+    const onA = await page.evaluate(() => ({
+      jun1: getAbsencesByDate('2026-06-01'),
+      jun8: getAbsencesByDate('2026-06-08'),
+    }));
+    expect(onA.jun1).toHaveLength(1);
+    expect(onA.jun8).toHaveLength(1);
+
+    await contextB.close();
+  });
+
+  test('an absence edit gets pushed within seconds without any other sync trigger, instead of waiting on the next full poll', async ({ page }) => {
+    const store = makeGithubStore();
+    page.on('dialog', d => d.accept());
+    await installGithubMock(page.context(), store);
+    await gotoApp(page);
+    await connectDeviceToSync(page, { token: 'tok' });
+    await waitForSyncIdle(page);
+
+    // Simulate typing an absence, then only the short background check
+    // firing (what the 3s interval in initSync does) — never calling
+    // runSync() directly, the way a real edit with no other sync trigger
+    // nearby would behave.
+    await page.evaluate(() => {
+      setData('cs_absences_2026-06-01', [{ teacher: 'Jane Smith', period: 1, course: 'Math' }]);
+      stampDailyItemChanges();
+    });
+    await waitForSyncIdle(page);
+
+    const saved = store.files.get('daily.json');
+    expect(saved).toBeTruthy();
+    const parsed = JSON.parse(Buffer.from(saved.content, 'base64').toString('utf8'));
+    const item = parsed.items.find(i => i.date === '2026-06-01');
+    expect(item.absences).toHaveLength(1);
+  });
+
+  test('an old whole-blob daily.json (from before per-date merge existed) is read correctly, not treated as empty', async ({ page }) => {
+    const store = makeGithubStore();
+    page.on('dialog', d => d.accept());
+    await installGithubMock(page.context(), store);
+    await gotoApp(page);
+
+    // The old shape syncBlobFile used to write: one snapshot, one
+    // timestamp, absences/notes/etc. keyed by date inside `data`.
+    const legacy = {
+      app: 'coverage-tracker', file: 'daily', savedAt: '2026-01-01T00:00:00.000Z',
+      updated: 1700000000000,
+      data: {
+        absences: { '2026-06-01': [{ teacher: 'Jane Smith', period: 1, course: 'Math' }] },
+        notes: {}, outsideSubCounts: {}, outsideSubUnavail: {},
+        seniorClassesEnded: '0', emailTemplate: '',
+      },
+    };
+    const body = Buffer.from(JSON.stringify(legacy)).toString('base64');
+    store.files.set('daily.json', { content: body, sha: 'sha1' });
+
+    await connectDeviceToSync(page, { token: 'tok' });
+    await waitForSyncIdle(page);
+
+    const absences = await page.evaluate(() => getAbsencesByDate('2026-06-01'));
+    expect(absences).toHaveLength(1);
+    expect(absences[0].teacher).toBe('Jane Smith');
+  });
 });
