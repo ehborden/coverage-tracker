@@ -300,4 +300,23 @@ test.describe('Misc regression fixes', () => {
     // Only a senior class that day: still out (so not pulled), nothing to cover
     expect(result.wednesday).toEqual([expect.objectContaining({ absentTeacher: 'Senior Teacher', absType: 'skip' })]);
   });
+  test('a failed save shows a warning banner and one alert, instead of failing silently', async ({ page }) => {
+    await gotoApp(page);
+    const alerts = [];
+    page.on('dialog', d => { alerts.push(d.message()); d.accept(); });
+    await page.evaluate(() => {
+      Storage.prototype.setItem = function () { throw new DOMException('full', 'QuotaExceededError'); };
+      setData('cs_roster', []);
+      setData('cs_log', []); // a second failure: banner stays, no second alert
+    });
+    await expect(page.locator('#save-failure-banner')).toContainText('Changes are NOT being saved (browser storage is full)');
+    expect(alerts).toHaveLength(1);
+
+    // A direct localStorage.setItem call (not through setData) that throws
+    // out of an event handler reaches the same warning.
+    await page.evaluate(() => { document.getElementById('save-failure-banner').remove(); });
+    await page.evaluate(() => setTimeout(() => saveSeniorClassesFlag(), 0));
+    await expect(page.locator('#save-failure-banner')).toBeVisible();
+    expect(alerts).toHaveLength(1);
+  });
 });

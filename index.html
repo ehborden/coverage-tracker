@@ -1489,8 +1489,43 @@ function getData(key, def) {
   catch { return def; }
 }
 function setData(key, val) {
-  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+  try { localStorage.setItem(key, JSON.stringify(val)); }
+  catch (err) { reportSaveFailure(err); }
 }
+
+// A save that fails (browser storage full, or blocked by a browser/IT
+// setting) used to be swallowed silently, so the screen looked fine while
+// nothing was actually kept. Now a red banner stays up until the page is
+// reloaded, with one alert the first time. Only one alert, because
+// absences save as you type and an alert per keystroke would be unusable.
+let _saveFailureAlerted = false;
+function reportSaveFailure(err) {
+  const full = err && (err.name === 'QuotaExceededError' || err.name === 'NS_ERROR_DOM_QUOTA_REACHED' || err.code === 22);
+  const why = full ? 'browser storage is full' : 'the browser blocked it';
+  const msg = `Changes are NOT being saved (${why}). Anything changed since this appeared is only on screen: write it down before closing this tab. Data → Backup still downloads everything saved up to now.`;
+  let banner = document.getElementById('save-failure-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'save-failure-banner';
+    banner.setAttribute('role', 'alert');
+    banner.style.cssText = 'position:sticky;top:0;z-index:1000;background:var(--red);color:#fff;padding:10px 16px;font-size:13px;font-weight:600;text-align:center';
+    document.body.prepend(banner);
+  }
+  banner.textContent = msg;
+  if (!_saveFailureAlerted) { _saveFailureAlerted = true; alert(msg); }
+}
+
+// The same for the places that call localStorage.setItem directly: those
+// throw instead of failing silently, but the error only reached the
+// developer console. Catch storage errors page-wide and show the warning.
+window.addEventListener('error', (e) => {
+  const err = e.error;
+  if (err && ['QuotaExceededError', 'NS_ERROR_DOM_QUOTA_REACHED'].includes(err.name)) reportSaveFailure(err);
+});
+window.addEventListener('unhandledrejection', (e) => {
+  const err = e.reason;
+  if (err && ['QuotaExceededError', 'NS_ERROR_DOM_QUOTA_REACHED'].includes(err.name)) reportSaveFailure(err);
+});
 
 // ── Label helpers ────────────────────────────────────
 // Coverage labels are stored as strings on log entries: 'Outside Sub', 'Outside Sub 1',
