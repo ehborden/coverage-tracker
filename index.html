@@ -744,6 +744,7 @@
         </div>
       </div>
       <div id="outside-sub-avail-area"></div>
+      <div id="trip-area"></div>
 
       <!-- Absences table -->
       <div class="flex-between mt-16" style="margin-bottom:10px">
@@ -1193,7 +1194,7 @@
 <div class="modal-overlay" id="grade12-temp-modal">
   <div class="modal" style="max-width:560px">
     <div class="modal-title">Grade 12 Temporary Periods</div>
-    <p style="color:var(--gray-600);margin-bottom:16px;font-size:13px">Teachers with grade 12 classes will have those periods marked as temporary once senior classes end. Temporary periods are still available for coverage but deprioritized — used only after all regular availability is exhausted.</p>
+    <p style="color:var(--gray-600);margin-bottom:16px;font-size:13px">Teachers with grade 12 classes will have those periods marked as temporary once senior classes end. Temporary periods are still available for coverage but deprioritized: a teacher on a regular free period is picked first unless they've already covered more this week.</p>
     <div id="grade12-temp-body" style="max-height:360px;overflow-y:auto;margin-bottom:16px"></div>
     <div style="display:flex;gap:8px;margin-bottom:12px">
       <button class="btn btn-ghost btn-sm" onclick="document.querySelectorAll('.g12-check').forEach(c => c.checked = true)">Select All</button>
@@ -2195,7 +2196,7 @@ function checkDailyChanged() {
 // concept here — a date's bundle is never "deleted," it just becomes
 // empty, which merges like any other change via plain "newer updated wins."
 
-const DAILY_DATE_PREFIXES = ['cs_absences_', 'cs_notes_', 'cs_outsidesubcount_', 'cs_outsidesub_unavail_'];
+const DAILY_DATE_PREFIXES = ['cs_absences_', 'cs_notes_', 'cs_outsidesubcount_', 'cs_outsidesub_unavail_', 'cs_trip_'];
 
 function allDailyDates() {
   const dates = new Set();
@@ -2216,6 +2217,7 @@ function dailyItemData(date) {
     notes: JSON.parse(localStorage.getItem('cs_notes_' + date) || '{}'),
     outsideSubCount: getData('cs_outsidesubcount_' + date, 0),
     outsideSubUnavail: getOutsideSubUnavail(date),
+    trip: getTripDay(date),
   };
 }
 
@@ -2228,6 +2230,9 @@ function applyDailyItem(item) {
   localStorage.setItem('cs_notes_' + item.date, JSON.stringify(item.notes || {}));
   setData('cs_outsidesubcount_' + item.date, item.outsideSubCount || 0);
   setOutsideSubUnavail(item.date, item.outsideSubUnavail || {});
+  // An item pushed by a copy of the app from before Grade Out existed has
+  // no trip field at all. That isn't "no trip today", so leave ours alone.
+  if (item.trip !== undefined) setTripDay(item.date, item.trip || {});
 }
 
 let _dailyItemBaseline = {}; // date -> sig of dailyItemData(date), for change detection only
@@ -2668,6 +2673,7 @@ function onDateChange() {
   const saved = getData('cs_outsidesubcount_' + newDate, null);
   document.getElementById('outside-sub-count').value = saved !== null ? saved : 0;
   renderOutsideSubAvail();
+  renderTripPanel();
 }
 
 function renderAbsencesTable() {
@@ -2678,6 +2684,7 @@ function renderAbsencesTable() {
   const saved = getData('cs_outsidesubcount_' + dateStr, null);
   document.getElementById('outside-sub-count').value = saved !== null ? saved : 0;
   renderOutsideSubAvail();
+  renderTripPanel();
 }
 
 // Shows one row per outside sub actually configured for this date, each
@@ -3028,10 +3035,22 @@ function assignCoverage(absences, dateStr, outsideSubCount) {
   // absentTeachers, or that person could be picked to cover someone else
   // on a day they're actually out.
   const absentTeachers = new Set(absences.filter(a => a.absType !== 'tardy').map(a => a.absentTeacher));
+  // Grade Out / Field Trip for this date. Chaperones can't be pulled, so
+  // they count as absent for everything below (eligibility, conflicts
+  // with an earlier run). A grade that's out frees its teachers' periods
+  // and means an absent teacher's class for that grade needs no sub.
+  const trip = getTripDay(dateStr);
+  trip.chaperones.forEach(n => absentTeachers.add(n));
+  const classIsOnTrip = (ab) => {
+    if (!trip.gradesOut.length) return false;
+    if (ab.sectionNumber || ab.courseName) return classAllInGrades({ section: ab.sectionNumber, courseName: ab.courseName }, trip.gradesOut);
+    const sched = scheduledClassFor(ab.absentTeacher, dayName, ab.period);
+    return !!(sched && typeof sched === 'object' && classAllInGrades(sched, trip.gradesOut));
+  };
   // Periods that actually need a substitute. 'skip' rows are excluded
   // from here and from everything below — they exist only to mark
   // someone absent, not to be assigned.
-  const coverableAbsences = absences.filter(a => a.absType !== 'skip');
+  const coverableAbsences = absences.filter(a => a.absType !== 'skip' && !(a.absType !== 'outside' && classIsOnTrip(a)));
 
   // Load existing assignments for this date (locking)
   const existing = getExistingAssignments(dateStr);
@@ -3172,9 +3191,11 @@ function assignCoverage(absences, dateStr, outsideSubCount) {
       if (!a) return new Set();
       return a instanceof Set ? a : new Set(a);
     };
-    // A teacher is eligible for a period if it's in their avail grid OR it's a temp period for that day
+    // A teacher is eligible for a period if it's in their avail grid, it's a
+    // temp period for that day, or a grade out freed their class that period
+    const isGradeOutFree = (t, period) => !!gradeOutFreedClass(t.name, dayName, period, trip.gradesOut);
     const isEligibleForPeriod = (t, period) =>
-      dayAvail(t).has(period) || isTempPeriod(t, period, dayName);
+      dayAvail(t).has(period) || isTempPeriod(t, period, dayName) || isGradeOutFree(t, period);
 
     let eligible = roster.filter(t =>
       t.tier !== 'E' &&
@@ -3203,15 +3224,18 @@ function assignCoverage(absences, dateStr, outsideSubCount) {
       return false;
     };
 
+    const freedThisPeriod = new Set(eligible.filter(t => !dayAvail(t).has(ab.period) && isGradeOutFree(t, ab.period)).map(t => t.name));
+
     eligible.sort((a, b) => {
       const sa = priorityScore(a, weeklyCounts[a.name] || 0);
       const sb = priorityScore(b, weeklyCounts[b.name] || 0);
       // Deprioritize teachers who already covered earlier this week
       const aWeek = weekAssigned.has(a.name) ? 10 : 0;
       const bWeek = weekAssigned.has(b.name) ? 10 : 0;
-      // Deprioritize temporary periods (grade 12 free periods) - used last before emergency
-      const aTmp = isTempPeriod(a, ab.period, dayName) ? 8 : 0;
-      const bTmp = isTempPeriod(b, ab.period, dayName) ? 8 : 0;
+      // Deprioritize temporary periods (grade 12 free periods) and periods
+      // freed by a grade out, the same amount either way
+      const aTmp = isTempPeriod(a, ab.period, dayName) || freedThisPeriod.has(a.name) ? 8 : 0;
+      const bTmp = isTempPeriod(b, ab.period, dayName) || freedThisPeriod.has(b.name) ? 8 : 0;
       // Capacity: remaining available periods this day (more capacity = lower score = picked sooner)
       const aCapacity = dayAvail(a).size || 1;
       const bCapacity = dayAvail(b).size || 1;
@@ -3238,7 +3262,8 @@ function assignCoverage(absences, dateStr, outsideSubCount) {
       const matchNote = levelMatches(chosen)
         ? (absLevel === 'MS' ? ' · MS match' : ` · Subject match: ${absSubject}`)
         : '';
-      const reason = `Tier ${chosen.tier} · ${wk} coverage${wk !== 1 ? 's' : ''} this week · Last: ${chosen.lastCoverageDate || 'never'} · Total: ${chosen.totalCoverages || 0}${matchNote}`;
+      const tripNote = freedThisPeriod.has(chosen.name) ? ' · Free from grade out' : '';
+      const reason = `Tier ${chosen.tier} · ${wk} coverage${wk !== 1 ? 's' : ''} this week · Last: ${chosen.lastCoverageDate || 'never'} · Total: ${chosen.totalCoverages || 0}${matchNote}${tripNote}`;
       const entry = { ...ab, coveringTeacher: chosen.name, assignReason: reason };
       assignments.push(entry);
       newEntries.push(entry);
@@ -3247,7 +3272,7 @@ function assignCoverage(absences, dateStr, outsideSubCount) {
       // in Override, where free teachers are already grouped as Available.
       const emergencyFree = roster.filter(t =>
         t.tier === 'E' &&
-        dayAvail(t).has(ab.period) &&
+        (dayAvail(t).has(ab.period) || isGradeOutFree(t, ab.period)) &&
         !t.excluded &&
         !usedToday.has(t.name) &&
         !absentTeachers.has(t.name)
@@ -3896,6 +3921,9 @@ async function saveTeacher() {
     lastCoverageDate: document.getElementById('t-last-date').value || '',
     previousCoverageDate: '',
     totalCoverages: parseInt(document.getElementById('t-total').value) || 0,
+    // Not on the form, so carry it over or an edit silently drops the
+    // teacher's Grade 12 Temp Periods
+    tempPeriods: existing?.tempPeriods || [],
   };
 
   // Convert avail arrays to Sets for engine use
@@ -4357,13 +4385,21 @@ function renderOverrideTable() {
   });
 
   // Build grouped dropdown for a given period
+  // Grade Out / Field Trip: chaperones always land in All Others, and a
+  // period freed by a grade out counts as available.
+  const trip = getTripDay(dateStr);
+  const chaperones = new Set(trip.chaperones);
+
   function buildOptions(period) {
     const available = [];
     const unavailable = [];
+    const freed = new Set();
     allNames.forEach(name => {
       const t = roster.find(r => r.name === name);
       const avail = t ? (t.avail[dayName] instanceof Set ? t.avail[dayName] : new Set(t.avail[dayName] || [])) : new Set();
+      if (chaperones.has(name)) { unavailable.push(name); return; }
       if (avail.has(period)) available.push(name);
+      else if (gradeOutFreedClass(name, dayName, period, trip.gradesOut)) { available.push(name); freed.add(name); }
       else unavailable.push(name);
     });
     available.sort();
@@ -4391,7 +4427,8 @@ function renderOverrideTable() {
         const busy = busyThisPeriod.has(n);
         const rt = roster.find(r => r.name === n);
         const emg = rt && rt.tier === 'E' ? ' · emergency only' : '';
-        return `<option value="${esc(n)}" ${busy ? 'style="color:var(--red)"' : ''}>${esc(n)}${emg}${busy ? ' — already assigned' : ''}</option>`;
+        const fr = freed.has(n) ? ' · free from grade out' : '';
+        return `<option value="${esc(n)}" ${busy ? 'style="color:var(--red)"' : ''}>${esc(n)}${emg}${fr}${busy ? ' — already assigned' : ''}</option>`;
       }).join('');
       opts += '</optgroup>';
     }
@@ -4399,7 +4436,8 @@ function renderOverrideTable() {
       opts += `<optgroup label="All Others">`;
       opts += unavailable.map(n => {
         const busy = busyThisPeriod.has(n);
-        return `<option value="${esc(n)}" ${busy ? 'style="color:var(--red)"' : ''}>${esc(n)}${busy ? ' — already assigned' : ''}</option>`;
+        const chap = chaperones.has(n) ? ' — chaperone' : '';
+        return `<option value="${esc(n)}" ${busy ? 'style="color:var(--red)"' : ''}>${esc(n)}${chap}${busy ? ' — already assigned' : ''}</option>`;
       }).join('');
       opts += '</optgroup>';
     }
@@ -5081,10 +5119,13 @@ function loadTeacherPeriods() {
     const c = items[0];
     const liveRoom = getRoomFromChart(c.section, c.day, parseInt(period)) || c.room;
     const seniorEnded = document.getElementById('senior-classes-ended')?.checked;
-    const isGrade12 = /\b12\b/.test(c.section) || /\b12\b/.test(c.courseName);
-    const autoSkip = seniorEnded && isGrade12;
+    const seniorSkip = seniorEnded && classAllInGrades(c, ['12']);
+    const gradesOut = dateStr ? getTripDay(dateStr).gradesOut : [];
+    const tripSkip = !seniorSkip && gradesOut.length > 0 && classAllInGrades(c, gradesOut);
+    const autoSkip = seniorSkip || tripSkip;
     const checkedAttr = autoSkip ? '' : 'checked';
-    const skipNote = autoSkip ? ' <span style="font-size:10px;color:var(--amber);font-weight:600">Senior class — skipped</span>' : '';
+    const skipNote = seniorSkip ? ' <span style="font-size:10px;color:var(--amber);font-weight:600">Senior class — skipped</span>'
+      : tripSkip ? ' <span style="font-size:10px;color:var(--amber);font-weight:600">Grade out — skipped</span>' : '';
     return `<label style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-bottom:4px;border:1.5px solid ${autoSkip ? 'var(--amber-light)' : 'var(--gray-200)'};border-radius:6px;cursor:pointer;background:var(--white)" class="abt-row">
       <input type="checkbox" class="abt-period-check" ${checkedAttr}
         data-period="${period}"
@@ -5307,7 +5348,7 @@ function startNewYear() {
 
   const label = schoolYearLabelFromLog(log);
   const roster = getRoster();
-  const dated = ['cs_absences_', 'cs_notes_', 'cs_outsidesubcount_', 'cs_outsidesub_unavail_'];
+  const dated = ['cs_absences_', 'cs_notes_', 'cs_outsidesubcount_', 'cs_outsidesub_unavail_', 'cs_trip_'];
   let datedCount = 0;
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
@@ -5647,6 +5688,10 @@ async function applyBackupPayload(payload) {
       Object.entries(payload.outsideSubUnavail || {}).forEach(([date, unavail]) => {
         setOutsideSubUnavail(date, unavail);
       });
+      // Restore Grade Out / Field Trip settings
+      Object.entries(payload.trips || {}).forEach(([date, trip]) => {
+        setTripDay(date, trip || {});
+      });
       touchBlob('schedule');
       touchBlob('roomchart');
       markDirty('daily');
@@ -5738,6 +5783,16 @@ function buildBackupPayload() {
     }
   }
 
+  // Collect per-date Grade Out / Field Trip settings
+  const trips = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('cs_trip_')) {
+      const dateStr = key.replace('cs_trip_', '');
+      try { trips[dateStr] = JSON.parse(localStorage.getItem(key)); } catch {}
+    }
+  }
+
   return {
     exportedAt: new Date().toISOString(),
     exportedFrom: window.location.href,
@@ -5752,6 +5807,7 @@ function buildBackupPayload() {
     notes,
     outsideSubCounts,
     outsideSubUnavail,
+    trips,
   };
 }
 
@@ -5785,6 +5841,11 @@ function showAvailPanel() {
       ? Array.from(document.querySelectorAll('.abs-teacher')).map(s => s.value).filter(Boolean)
       : []
   );
+  // Chaperones show struck through like an absence. A period freed by a
+  // grade out shows with a dashed border.
+  const trip = getTripDay(dateStr);
+  trip.chaperones.forEach(n => absentTeachers.add(n));
+  const freedKeys = new Set();
 
   // Group by period
   const byPeriod = {};
@@ -5796,6 +5857,11 @@ function showAvailPanel() {
     const periods = avail instanceof Set ? avail : new Set(avail || []);
     periods.forEach(p => {
       if (byPeriod[p]) byPeriod[p].push(t);
+    });
+    PERIODS.forEach(p => {
+      if (periods.has(p) || !gradeOutFreedClass(t.name, dayName, p, trip.gradesOut)) return;
+      byPeriod[p].push(t);
+      freedKeys.add(`${t.name}||${p}`);
     });
   });
 
@@ -5815,8 +5881,10 @@ function showAvailPanel() {
       const bg = isAbsent ? 'var(--red-light)' : t.tier === '1' ? 'var(--light-blue-bg)' : t.tier === '2' ? 'var(--green-light)' : t.tier === '3' ? 'var(--amber-light)' : 'var(--red-light)';
       const color = isAbsent ? 'var(--red)' : t.tier === '1' ? 'var(--navy)' : t.tier === '2' ? 'var(--green)' : t.tier === '3' ? 'var(--amber)' : 'var(--red)';
       const strike = isAbsent ? 'text-decoration:line-through;' : '';
-      const title = `${t.name} — Tier ${t.tier} — ${wk} coverage${wk !== 1 ? 's' : ''} this week — Last: ${t.lastCoverageDate || 'never'}`;
-      return `<span title="${esc(title)}" style="display:inline-block;${strike}background:${bg};color:${color};border-radius:4px;padding:2px 7px;margin:2px;font-size:11px;font-weight:600">${esc(t.name)}</span>`;
+      const freed = freedKeys.has(`${t.name}||${p}`);
+      const freedStyle = freed ? 'outline:1px dashed currentColor;' : '';
+      const title = `${t.name} — Tier ${t.tier} — ${wk} coverage${wk !== 1 ? 's' : ''} this week — Last: ${t.lastCoverageDate || 'never'}${freed ? ' — free from grade out' : ''}${trip.chaperones.includes(t.name) ? ' — chaperone' : ''}`;
+      return `<span title="${esc(title)}" style="display:inline-block;${strike}${freedStyle}background:${bg};color:${color};border-radius:4px;padding:2px 7px;margin:2px;font-size:11px;font-weight:600">${esc(t.name)}</span>`;
     }).join('');
     const available = teachers.filter(t => !absentTeachers.has(t.name)).length;
     html += `<tr><td style="font-weight:700;text-align:center;width:60px">${p}</td><td>${chips || '<span style="color:var(--gray-400);font-size:11px">None available</span>'}</td><td style="text-align:center;font-weight:600;color:${available < 2 ? 'var(--red)' : 'var(--green)'}">${available}</td></tr>`;
@@ -6035,12 +6103,12 @@ function openGrade12TempModal() {
   const roster = getRoster();
   const body = document.getElementById('grade12-temp-body');
 
-  // Find all grade 12 classes per teacher from scheduleData
+  // Find all grade 12 classes per teacher from scheduleData. A combined
+  // class like "11/12" still has juniors in it, so it doesn't count.
   const grade12ByTeacher = {};
   Object.entries(scheduleData).forEach(([teacher, classes]) => {
     classes.forEach(c => {
-      const isGrade12 = /\b12\b/.test(c.section) || /\b12\b/.test(c.courseName);
-      if (!isGrade12) return;
+      if (!classAllInGrades(c, ['12'])) return;
       if (!grade12ByTeacher[teacher]) grade12ByTeacher[teacher] = [];
       grade12ByTeacher[teacher].push(c);
     });
@@ -6104,6 +6172,158 @@ function clearAllTempPeriods() {
   document.getElementById('grade12-temp-modal').classList.remove('open');
   renderRoster();
   alert('All temporary periods cleared.');
+}
+
+
+// ═══════════════════════════════════════════════════════
+//  GRADE OUT / FIELD TRIP
+//  Per date: { gradesOut: ['9'], chaperones: ['Name', ...] }, stored as
+//  cs_trip_<date> and synced with the rest of that date's daily bundle.
+//  - A chaperone is never pulled to cover, and needs no coverage of their
+//    own from this list. Any class of theirs that still meets that day
+//    (a grade not on the trip) is shown in the panel as a reminder to
+//    add a normal absence row if it needs a sub.
+//  - A grade out frees every teacher's class for that grade that day.
+//    Those periods count as available for coverage, deprioritized the
+//    same way as Grade 12 Temp Periods. An absent teacher's class for
+//    that grade needs no coverage either.
+//  Only a whole-grade trip frees periods. A combined class ("6/7") is
+//  freed only when every grade in it is out.
+// ═══════════════════════════════════════════════════════
+
+// Section codes are "SUBJ GRADE-SECTION" ("ENG 9-2", "MTH 8-1.G1.SCH"),
+// with combined grades written "6/7" ("SCI 6/7-1"). Returns the grades
+// as strings, or [] when the code doesn't follow that pattern.
+const GRADE_SECTION_RE = /(?:^|\s)(\d{1,2}(?:\/\d{1,2})*)-\d/;
+function classGrades(c) {
+  const m = String(c.section || '').match(GRADE_SECTION_RE) || String(c.courseName || '').match(GRADE_SECTION_RE);
+  return m ? m[1].split('/').map(g => String(parseInt(g, 10))) : [];
+}
+
+function classAllInGrades(c, grades) {
+  const g = classGrades(c);
+  return g.length > 0 && g.every(x => grades.includes(x));
+}
+
+function getTripDay(dateStr) {
+  const t = getData('cs_trip_' + dateStr, null) || {};
+  return {
+    gradesOut: Array.isArray(t.gradesOut) ? t.gradesOut.map(String) : [],
+    chaperones: Array.isArray(t.chaperones) ? t.chaperones.filter(Boolean) : [],
+  };
+}
+
+function setTripDay(dateStr, trip) {
+  const gradesOut = [...new Set((trip.gradesOut || []).map(String))].sort((a, b) => a - b);
+  const chaperones = [...new Set(trip.chaperones || [])];
+  if (!gradesOut.length && !chaperones.length) { localStorage.removeItem('cs_trip_' + dateStr); return; }
+  setData('cs_trip_' + dateStr, { gradesOut, chaperones });
+}
+
+// The class a teacher would have had this period, if a grade out frees
+// it: every class they have that day/period is entirely in gradesOut.
+// null otherwise (no class, a real free period, or students still there).
+function gradeOutFreedClass(teacherName, dayName, period, gradesOut) {
+  if (!gradesOut.length) return null;
+  const classes = (scheduleData[teacherName] || []).filter(c => c.day === dayName && c.period === period);
+  if (!classes.length || !classes.every(c => classAllInGrades(c, gradesOut))) return null;
+  return classes[0];
+}
+
+function tripDayName(dateStr) {
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
+}
+
+function renderTripPanel() {
+  const area = document.getElementById('trip-area');
+  if (!area) return;
+  const dateStr = document.getElementById('run-date').value;
+  if (!dateStr) { area.innerHTML = ''; return; }
+  const trip = getTripDay(dateStr);
+  const dayName = tripDayName(dateStr);
+
+  const grades = new Set(trip.gradesOut);
+  Object.values(scheduleData).forEach(classes => classes.forEach(c => classGrades(c).forEach(g => grades.add(g))));
+  const gradeList = [...grades].sort((a, b) => a - b);
+  const gradeBoxes = gradeList.length
+    ? gradeList.map(g => `<label style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;font-size:13px;cursor:pointer">
+        <input type="checkbox" class="trip-grade-check" data-grade="${esc(g)}" ${trip.gradesOut.includes(g) ? 'checked' : ''} onchange="toggleGradeOut(this.dataset.grade, this.checked)" style="width:auto" />
+        ${esc(g)}
+      </label>`).join('')
+    : '<span style="font-size:12px;color:var(--gray-400)">Load a schedule to pick a grade.</span>';
+
+  const names = getRoster().map(t => t.name).filter(n => !trip.chaperones.includes(n)).sort();
+  const chips = trip.chaperones.map(n =>
+    `<span class="tag" style="display:inline-flex;align-items:center;gap:4px;margin:2px 4px 2px 0">${esc(n)}
+      <button type="button" class="btn btn-ghost btn-sm" style="padding:0 4px;line-height:1" data-name="${esc(n)}" onclick="removeChaperone(this.dataset.name)" aria-label="Remove ${esc(n)} as chaperone">×</button>
+    </span>`).join('');
+
+  const notes = [];
+  if (trip.gradesOut.length) {
+    const label = trip.gradesOut.length === 1 ? `Grade ${trip.gradesOut[0]}` : `Grades ${trip.gradesOut.join(', ')}`;
+    let freed = 0;
+    getRoster().forEach(t => {
+      if (trip.chaperones.includes(t.name)) return;
+      PERIODS.forEach(p => { if (gradeOutFreedClass(t.name, dayName, p, trip.gradesOut)) freed++; });
+    });
+    notes.push(`${label} out: ${freed} teacher period${freed !== 1 ? 's' : ''} freed up for coverage (picked after regular free periods when fairness is otherwise close). Absent teachers' ${label.toLowerCase()} classes need no coverage.`);
+  }
+  trip.chaperones.forEach(n => {
+    const stillMeet = (scheduleData[n] || [])
+      .filter(c => c.day === dayName && !(trip.gradesOut.length && classAllInGrades(c, trip.gradesOut)))
+      .sort((a, b) => a.period - b.period);
+    if (stillMeet.length) {
+      notes.push(`${n} still has ${stillMeet.map(c => `P${c.period} ${c.section || c.courseName}`).join(', ')} today. Add an absence if those classes need coverage.`);
+    }
+  });
+
+  area.innerHTML = `<div class="trip-panel" style="border:1px solid var(--gray-200);border-radius:6px;padding:10px 12px;margin-top:12px">
+    <div style="font-weight:600;font-size:13px;margin-bottom:8px">Grade Out / Field Trip</div>
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
+      <div>
+        <div style="font-size:12px;color:var(--gray-600);margin-bottom:4px">Whole grade out</div>
+        ${gradeBoxes}
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--gray-600);margin-bottom:4px"><label for="trip-chaperone-select" style="margin:0">Chaperones (not pulled, no coverage needed)</label></div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <select id="trip-chaperone-select" style="width:auto"><option value="">Select teacher...</option>${names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}</select>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="addChaperone()">Add as chaperone</button>
+        </div>
+        <div id="trip-chaperone-list" style="margin-top:6px">${chips}</div>
+      </div>
+    </div>
+    ${notes.length ? `<div id="trip-notes" style="margin-top:8px;font-size:12px;color:var(--gray-600)">${notes.map(n => `<div>${esc(n)}</div>`).join('')}</div>` : ''}
+  </div>`;
+}
+
+function toggleGradeOut(grade, on) {
+  const dateStr = document.getElementById('run-date').value;
+  if (!dateStr) { alert('Please select a date.'); return; }
+  const trip = getTripDay(dateStr);
+  trip.gradesOut = on ? trip.gradesOut.concat(String(grade)) : trip.gradesOut.filter(g => g !== String(grade));
+  setTripDay(dateStr, trip);
+  renderTripPanel();
+}
+
+function addChaperone() {
+  const dateStr = document.getElementById('run-date').value;
+  if (!dateStr) { alert('Please select a date.'); return; }
+  const name = document.getElementById('trip-chaperone-select').value;
+  if (!name) return;
+  const trip = getTripDay(dateStr);
+  trip.chaperones.push(name);
+  setTripDay(dateStr, trip);
+  renderTripPanel();
+}
+
+function removeChaperone(name) {
+  const dateStr = document.getElementById('run-date').value;
+  if (!dateStr) return;
+  const trip = getTripDay(dateStr);
+  trip.chaperones = trip.chaperones.filter(n => n !== name);
+  setTripDay(dateStr, trip);
+  renderTripPanel();
 }
 
 
@@ -6308,6 +6528,8 @@ function renderManualTable() {
   const absentTeachers = new Set(
     getAbsencesByDate(dateStr).map(a => a.teacher).filter(Boolean)
   );
+  const trip = getTripDay(dateStr);
+  trip.chaperones.forEach(n => absentTeachers.add(n));
 
   const tierOrder = { '1':0, '2':1, '3':2, 'E':3 };
 
@@ -6324,7 +6546,7 @@ function renderManualTable() {
       if (absentTeachers.has(t.name)) return false;
       const avail = t.avail[dayName];
       const periods = avail instanceof Set ? avail : new Set(avail || []);
-      return periods.has(period);
+      return periods.has(period) || !!gradeOutFreedClass(t.name, dayName, period, trip.gradesOut);
     }).sort((a, b) => (tierOrder[a.tier] ?? 9) - (tierOrder[b.tier] ?? 9) || (weeklyCounts[a.name]||0) - (weeklyCounts[b.name]||0));
 
     const options = `<option value="">— unassigned —</option>`
