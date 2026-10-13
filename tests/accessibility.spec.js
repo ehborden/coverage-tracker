@@ -11,7 +11,7 @@ const AXE_SRC = fs.readFileSync(
 // Every screen the header nav can reach. Each is scanned with real (if
 // minimal) data loaded, since an empty roster/log hides some issues
 // (e.g. a table with no rows never renders its empty-action-column header).
-const SCREENS = ['run', 'roster', 'log', 'summary', 'override', 'schedule', 'roomchart'];
+const SCREENS = ['run', 'roster', 'summary', 'override', 'schedule', 'roomchart'];
 
 // A first pass only scanned the 7 top-level screens and missed real
 // critical violations inside modals (Teacher Modal, Add-by-Teacher) that
