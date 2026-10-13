@@ -692,6 +692,7 @@
           <button onclick="openSyncModal();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:white;font-family:inherit;font-size:13px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Connect with GitHub</button>
           <button onclick="openRestoreGithubModal();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:white;font-family:inherit;font-size:13px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Restore from GitHub</button>
           <div style="height:1px;background:rgba(255,255,255,0.15);margin:4px 0"></div>
+          <button onclick="openSettingsModal();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:white;font-family:inherit;font-size:13px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Settings</button>
           <button onclick="startNewYear();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:white;font-family:inherit;font-size:13px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Start New Year</button>
           <button onclick="clearRoster();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:#ff9d9d;font-family:inherit;font-size:13px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Clear Roster</button>
         </div>
@@ -897,7 +898,6 @@
         <div class="card-title" style="margin:0">Coverage History</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <input type="search" id="history-search" placeholder="Search teacher" aria-label="Search teacher" oninput="renderHistory()" style="width:200px;font-size:13px;padding:6px 10px" />
-          <button class="btn btn-ghost btn-sm" id="tier-toggle-btn" onclick="toggleHistoryTiers()">Hide tiers</button>
           <button class="btn btn-ghost btn-sm" onclick="renderHistory()">Refresh</button>
         </div>
       </div>
@@ -1192,6 +1192,19 @@
     <div class="flex-end mt-20">
       <button class="btn btn-ghost" onclick="closeResetModal()">Cancel</button>
       <button class="btn btn-danger" onclick="confirmReset()">Reset This Day</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="settings-modal">
+  <div class="modal" style="max-width:440px" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
+    <div class="modal-title" id="settings-modal-title">Settings</div>
+    <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;text-transform:none;letter-spacing:0">
+      <input type="checkbox" id="setting-show-tiers" onchange="setHistoryShowTiers(this.checked)" style="width:auto;margin-top:2px" />
+      <span><strong>Show tiers on History</strong><br><span style="color:var(--gray-600)">Adds the tier column and tier colors to the totals and weekly grid. Only affects this computer.</span></span>
+    </label>
+    <div class="flex-end mt-20">
+      <button class="btn btn-primary" onclick="closeSettingsModal()">Done</button>
     </div>
   </div>
 </div>
@@ -4215,27 +4228,31 @@ function setDetailedLogOpen(open) {
   if (arrow) arrow.textContent = open ? '▾' : '▸';
 }
 
-// A per-browser preference, so it's remembered across reloads on this
-// computer only. Hiding tiers also stops sorting by tier, since a list
-// grouped by tier would give them away anyway.
+// Tiers are hidden on History unless turned on in Data → Settings. A
+// per-browser preference, remembered across reloads on this computer
+// only. Hidden tiers also mean no sorting by tier, since a list grouped
+// by tier would give them away anyway.
 function historyTiersHidden() {
-  try { return localStorage.getItem('cs_history_hide_tiers') === '1'; } catch { return false; }
+  try { return localStorage.getItem('cs_history_show_tiers') !== '1'; } catch { return true; }
 }
 
 function applyHistoryTierVisibility() {
   const hidden = historyTiersHidden();
   document.getElementById('screen-summary')?.classList.toggle('hide-tiers', hidden);
-  const btn = document.getElementById('tier-toggle-btn');
-  if (btn) btn.textContent = hidden ? 'Show tiers' : 'Hide tiers';
   return hidden;
 }
 
-function toggleHistoryTiers() {
-  const next = !historyTiersHidden();
-  try { localStorage.setItem('cs_history_hide_tiers', next ? '1' : '0'); } catch {}
-  if (next && _sumSortCol === 'tier') { _sumSortCol = 'name'; _sumSortDir = 'asc'; }
+function setHistoryShowTiers(show) {
+  try { localStorage.setItem('cs_history_show_tiers', show ? '1' : '0'); } catch {}
+  if (!show && _sumSortCol === 'tier') { _sumSortCol = 'name'; _sumSortDir = 'asc'; }
   renderHistory();
 }
+
+function openSettingsModal() {
+  document.getElementById('setting-show-tiers').checked = !historyTiersHidden();
+  document.getElementById('settings-modal').classList.add('open');
+}
+function closeSettingsModal() { document.getElementById('settings-modal').classList.remove('open'); }
 
 function clearLog() {
   if (!confirm('Clear the entire coverage log? This cannot be undone.')) return;
