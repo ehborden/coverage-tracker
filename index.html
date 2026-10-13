@@ -463,6 +463,9 @@
   .summary-t2 { background: var(--green-light); }
   .summary-t3 { background: var(--amber-light); }
   .summary-te { background: var(--red-light); }
+  /* History's "Hide tiers" button: no tier column, no tier colors */
+  #screen-summary.hide-tiers .tier-col { display: none; }
+  #screen-summary.hide-tiers tr[class^="summary-t"] { background: none; }
 
   /* ── ASSIGN REASON TOOLTIP ── */
   .assign-reason {
@@ -672,8 +675,7 @@
     <nav class="nav" id="nav-main" aria-label="Main navigation">
       <button class="nav-btn active" onclick="showScreen('run')">Run Coverage</button>
       <button class="nav-btn" onclick="showScreen('roster')">Roster</button>
-      <button class="nav-btn" onclick="showScreen('log')">Log</button>
-      <button class="nav-btn" onclick="showScreen('summary')">Summary</button>
+      <button class="nav-btn" onclick="showScreen('summary')">History</button>
     </nav>
     <nav class="nav" id="nav-data" aria-label="Data navigation" style="opacity:0.85">
       <button class="nav-btn" onclick="showScreen('schedule')">Schedule</button>
@@ -887,52 +889,24 @@
   </div>
 
   <!-- ══════════════════════════════════════════
-       SCREEN: LOG
-  ══════════════════════════════════════════ -->
-  <div id="screen-log" class="screen">
-    <div class="card">
-      <div class="flex-between" style="margin-bottom:16px">
-        <div class="card-title" style="margin:0">Coverage Log</div>
-        <button class="btn btn-danger btn-sm" onclick="clearLog()">Clear All</button>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th style="cursor:pointer;user-select:none" onclick="sortLog('date')">Date <span id="log-sort-date"></span></th>
-              <th style="cursor:pointer;user-select:none" onclick="sortLog('absentTeacher')">Absent Teacher <span id="log-sort-absentTeacher"></span></th>
-              <th style="cursor:pointer;user-select:none" onclick="sortLog('period')">Period <span id="log-sort-period"></span></th>
-              <th>Course</th>
-              <th>Section</th>
-              <th>Room</th>
-              <th style="cursor:pointer;user-select:none" onclick="sortLog('coveringTeacher')">Covering Teacher <span id="log-sort-coveringTeacher"></span></th>
-            </tr>
-          </thead>
-          <tbody id="log-tbody"></tbody>
-        </table>
-      </div>
-      <div id="log-empty" class="empty" style="display:none">
-        <div class="empty-icon">📋</div>
-        <div class="empty-text">No coverage assignments logged yet.</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══════════════════════════════════════════
        SCREEN: SUMMARY
   ══════════════════════════════════════════ -->
   <div id="screen-summary" class="screen">
     <div class="card">
-      <div class="flex-between" style="margin-bottom:16px">
-        <div class="card-title" style="margin:0">Coverage Summary</div>
-        <button class="btn btn-ghost btn-sm" onclick="renderSummary()">Refresh</button>
+      <div class="flex-between" style="margin-bottom:16px;gap:8px;flex-wrap:wrap">
+        <div class="card-title" style="margin:0">Coverage History</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="search" id="history-search" placeholder="Search teacher" aria-label="Search teacher" oninput="renderHistory()" style="width:200px;font-size:13px;padding:6px 10px" />
+          <button class="btn btn-ghost btn-sm" id="tier-toggle-btn" onclick="toggleHistoryTiers()">Hide tiers</button>
+          <button class="btn btn-ghost btn-sm" onclick="renderHistory()">Refresh</button>
+        </div>
       </div>
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
               <th style="cursor:pointer;user-select:none" onclick="sortSummary('name')">Teacher <span id="sum-sort-name"></span></th>
-              <th style="cursor:pointer;user-select:none" onclick="sortSummary('tier')">Tier <span id="sum-sort-tier"></span></th>
+              <th class="tier-col" style="cursor:pointer;user-select:none" onclick="sortSummary('tier')">Tier <span id="sum-sort-tier"></span></th>
               <th style="cursor:pointer;user-select:none" onclick="sortSummary('total')">Total (Year) <span id="sum-sort-total"></span></th>
               <th style="cursor:pointer;user-select:none" onclick="sortSummary('week')">This Week <span id="sum-sort-week"></span></th>
               <th style="cursor:pointer;user-select:none" onclick="sortSummary('last')">Last Coverage <span id="sum-sort-last"></span></th>
@@ -952,6 +926,37 @@
         </div>
       </div>
       <div id="weekly-grid-body" class="table-wrap"></div>
+    </div>
+
+    <div class="card">
+      <div class="flex-between" style="margin-bottom:0">
+        <button type="button" id="detailed-log-toggle" class="btn btn-ghost btn-sm" aria-expanded="false" aria-controls="detailed-log-body" onclick="setDetailedLogOpen(!_detailedLogOpen)" style="font-size:15px;font-weight:600">Detailed Log <span id="detailed-log-count" style="font-weight:400;color:var(--gray-600)"></span> <span id="detailed-log-arrow">▸</span></button>
+      </div>
+      <div id="detailed-log-body" style="display:none;margin-top:16px">
+        <div class="flex-end" style="margin-bottom:12px">
+          <button class="btn btn-danger btn-sm" onclick="clearLog()">Clear All</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="cursor:pointer;user-select:none" onclick="sortLog('date')">Date <span id="log-sort-date"></span></th>
+                <th style="cursor:pointer;user-select:none" onclick="sortLog('absentTeacher')">Absent Teacher <span id="log-sort-absentTeacher"></span></th>
+                <th style="cursor:pointer;user-select:none" onclick="sortLog('period')">Period <span id="log-sort-period"></span></th>
+                <th>Course</th>
+                <th>Section</th>
+                <th>Room</th>
+                <th style="cursor:pointer;user-select:none" onclick="sortLog('coveringTeacher')">Covering Teacher <span id="log-sort-coveringTeacher"></span></th>
+              </tr>
+            </thead>
+            <tbody id="log-tbody"></tbody>
+          </table>
+        </div>
+        <div id="log-empty" class="empty" style="display:none">
+          <div class="empty-icon">📋</div>
+          <div class="empty-text">No coverage assignments logged yet.</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1720,11 +1725,14 @@ async function initData() {
 // ═══════════════════════════════════════════════════════
 
 function showScreen(name) {
+  // The Log is a collapsible section on History now, so 'log' lands there
+  // with it opened.
+  if (name === 'log') { name = 'summary'; setDetailedLogOpen(true); }
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('screen-' + name).classList.add('active');
-  // Main nav: run, roster, log, summary
-  const mainMap = { run:0, roster:1, log:2, summary:3 };
+  // Main nav: run, roster, summary (History)
+  const mainMap = { run:0, roster:1, summary:2 };
   if (mainMap[name] !== undefined)
     document.querySelectorAll('#nav-main .nav-btn')[mainMap[name]].classList.add('active');
   // Data nav: schedule, roomchart (index 0, 1)
@@ -1737,8 +1745,7 @@ function showScreen(name) {
     if (rep) rep.style.display = 'none';
   }
   if (name === 'roster') renderRoster();
-  if (name === 'log') renderLog();
-  if (name === 'summary') { renderSummary(); renderWeeklyGrid(); }
+  if (name === 'summary') { renderSummary(); renderWeeklyGrid(); renderLog(); }
   if (name === 'override') {
     // Follow whatever date is selected on Run Coverage, so jumping to
     // Override from a day you're actively working on lands on that day
@@ -4134,10 +4141,18 @@ function sortLog(col) {
 }
 
 function renderLog() {
-  let log = getLog().slice();
+  const q = historySearchQuery();
+  let log = getLog().filter(e => !q || historyNameMatches(e.absentTeacher, q) || historyNameMatches(e.coveringTeacher, q));
   const tbody = document.getElementById('log-tbody');
   const empty = document.getElementById('log-empty');
-  if (log.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+  const count = document.getElementById('detailed-log-count');
+  if (count) count.textContent = `(${log.length}${q ? ' matching' : ''})`;
+  if (log.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    empty.querySelector('.empty-text').textContent = q ? 'No log entries for that name.' : 'No coverage assignments logged yet.';
+    return;
+  }
   empty.style.display = 'none';
 
   // Sort
@@ -4167,6 +4182,59 @@ function renderLog() {
     <td>${esc(e.roomNumber || '')}</td>
     <td style="${isUnassigned(e.coveringTeacher) ? 'color:var(--red);font-weight:600' : ''}">${esc(e.coveringTeacher)}</td>
   </tr>`).join('');
+}
+
+// ── History screen: search, tier toggle, Detailed Log ──
+// History is the old Summary and Log on one screen. The search box filters
+// all three parts at once (totals, weekly grid, detailed log); the log
+// matches a name as either the absent or the covering teacher.
+
+function historySearchQuery() {
+  const el = document.getElementById('history-search');
+  return el ? el.value.trim().toLowerCase() : '';
+}
+
+function historyNameMatches(name, q) {
+  return String(name || '').toLowerCase().includes(q);
+}
+
+function renderHistory() {
+  renderSummary();
+  renderWeeklyGrid();
+  renderLog();
+}
+
+let _detailedLogOpen = false;
+function setDetailedLogOpen(open) {
+  _detailedLogOpen = open;
+  const body = document.getElementById('detailed-log-body');
+  const btn = document.getElementById('detailed-log-toggle');
+  const arrow = document.getElementById('detailed-log-arrow');
+  if (body) body.style.display = open ? 'block' : 'none';
+  if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (arrow) arrow.textContent = open ? '▾' : '▸';
+}
+
+// A per-browser preference, so it's remembered across reloads on this
+// computer only. Hiding tiers also stops sorting by tier, since a list
+// grouped by tier would give them away anyway.
+function historyTiersHidden() {
+  try { return localStorage.getItem('cs_history_hide_tiers') === '1'; } catch { return false; }
+}
+
+function applyHistoryTierVisibility() {
+  const hidden = historyTiersHidden();
+  document.getElementById('screen-summary')?.classList.toggle('hide-tiers', hidden);
+  const btn = document.getElementById('tier-toggle-btn');
+  if (btn) btn.textContent = hidden ? 'Show tiers' : 'Hide tiers';
+  return hidden;
+}
+
+function toggleHistoryTiers() {
+  const next = !historyTiersHidden();
+  try { localStorage.setItem('cs_history_hide_tiers', next ? '1' : '0'); } catch {}
+  if (next && _sumSortCol === 'tier') { _sumSortCol = 'name'; _sumSortDir = 'asc'; }
+  renderHistory();
 }
 
 function clearLog() {
@@ -4212,8 +4280,11 @@ function renderSummary() {
     }
   });
 
+  const tiersHidden = applyHistoryTierVisibility();
+  if (tiersHidden && _sumSortCol === 'tier') { _sumSortCol = 'name'; _sumSortDir = 'asc'; }
+  const q = historySearchQuery();
   const tierOrder = { '1': 0, '2': 1, '3': 2, 'E': 3 };
-  const sorted = [...roster].sort((a, b) => {
+  const sorted = roster.filter(t => !q || historyNameMatches(t.name, q)).sort((a, b) => {
     let va, vb;
     if (_sumSortCol === 'name') { va = a.name.toLowerCase(); vb = b.name.toLowerCase(); }
     else if (_sumSortCol === 'tier') { va = tierOrder[a.tier] ?? 9; vb = tierOrder[b.tier] ?? 9; }
@@ -4232,6 +4303,7 @@ function renderSummary() {
   });
 
   const tbody = document.getElementById('summary-tbody');
+  if (!sorted.length && q) { tbody.innerHTML = '<tr><td colspan="5" style="color:var(--gray-400)">No teacher matches that name.</td></tr>'; return; }
   tbody.innerHTML = sorted.map(t => {
     const total = countsByTeacher[t.name] || 0;
     const week = weekCountsByTeacher[t.name] || 0;
@@ -4239,7 +4311,7 @@ function renderSummary() {
     const rowClass = `summary-t${t.tier.toLowerCase()}`;
     return `<tr class="${rowClass}">
       <td style="font-weight:600">${esc(t.name)}${t.excluded ? ' <span class="tag tag-red">excluded</span>' : ''}</td>
-      <td><div class="tier-chip tier-${t.tier.toLowerCase()}">${t.tier}</div></td>
+      <td class="tier-col"><div class="tier-chip tier-${t.tier.toLowerCase()}">${t.tier}</div></td>
       <td style="font-weight:600;text-align:center">${total}</td>
       <td style="text-align:center">${week}</td>
       <td style="font-size:12px">${last}</td>
@@ -5962,14 +6034,16 @@ function renderWeeklyGrid() {
   });
 
   // Only show teachers who covered this week or are on roster
-  const sorted = [...roster].sort((a, b) => {
-    const ta = tierOrder[a.tier] ?? 9;
-    const tb = tierOrder[b.tier] ?? 9;
+  const tiersHidden = historyTiersHidden();
+  const q = historySearchQuery();
+  const sorted = roster.filter(t => !q || historyNameMatches(t.name, q)).sort((a, b) => {
+    const ta = tiersHidden ? 0 : (tierOrder[a.tier] ?? 9);
+    const tb = tiersHidden ? 0 : (tierOrder[b.tier] ?? 9);
     return ta !== tb ? ta - tb : a.name.localeCompare(b.name);
   });
 
   let html = '<table style="font-size:12px;width:100%;border-collapse:collapse"><thead><tr>';
-  html += '<th style="text-align:left;padding:8px 10px;min-width:140px">Teacher</th><th style="text-align:center;padding:8px 4px;width:30px">Tier</th>';
+  html += '<th style="text-align:left;padding:8px 10px;min-width:140px">Teacher</th><th class="tier-col" style="text-align:center;padding:8px 4px;width:30px">Tier</th>';
   weekDates.forEach(wd => {
     html += `<th style="text-align:center;padding:8px 6px;min-width:100px">${wd.dayName.slice(0,3)}<br><span style="font-weight:400;color:var(--gray-400)">${wd.short}</span></th>`;
   });
@@ -5979,7 +6053,7 @@ function renderWeeklyGrid() {
     const weekTotal = weekDates.reduce((sum, wd) => sum + (covered[t.name]?.[wd.dateStr]?.length || 0), 0);
     html += `<tr style="border-top:1px solid var(--gray-100)">`;
     html += `<td style="padding:7px 10px;font-weight:600">${esc(t.name)}${t.excluded ? ' <span style="font-size:10px;color:var(--red)">(excl)</span>' : ''}</td>`;
-    html += `<td style="text-align:center;padding:7px 4px"><div class="tier-chip tier-${t.tier.toLowerCase()}">${t.tier}</div></td>`;
+    html += `<td class="tier-col" style="text-align:center;padding:7px 4px"><div class="tier-chip tier-${t.tier.toLowerCase()}">${t.tier}</div></td>`;
     weekDates.forEach(wd => {
       const entries = covered[t.name]?.[wd.dateStr] || [];
       if (entries.length === 0) {
