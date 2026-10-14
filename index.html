@@ -388,6 +388,26 @@
     margin: 16px 0 6px;
     font-size: 14px;
   }
+  /* Coverage results: one compact table per absent teacher / outside sub */
+  .out-teacher { display: flex; justify-content: space-between; align-items: baseline; margin: 20px 0 6px; font-family: 'DM Sans', sans-serif; }
+  .out-teacher h3 { margin: 0; font-size: 15px; color: var(--navy); }
+  .out-table { width: 100%; border-collapse: collapse; font-family: 'DM Sans', sans-serif; margin-bottom: 6px; table-layout: fixed; }
+  .out-table th { font-size: 11px; padding: 7px 10px; }
+  .out-table td { padding: 9px 10px; font-size: 13px; }
+  .out-table td.out-p { font-weight: 700; width: 36px; text-align: center; }
+  .out-table td.out-cov { font-weight: 700; font-size: 14px; }
+  .out-table td.out-unassigned { color: var(--red); }
+  .out-table .out-why { display: block; font-weight: 400; font-size: 11px; color: var(--gray-600); }
+  .out-table td.out-n { text-align: right; }
+  .out-table tr.out-note-row td { padding-top: 0; border-top: none; }
+  .out-table tr.out-note-row:hover td, .out-table tr:hover td { background: none; }
+  .btn.out-add { background: none; border: none; padding: 2px 4px; font-size: 12px; font-weight: 600; color: var(--navy); }
+  .btn.out-add:hover { text-decoration: underline; }
+  .out-note { min-height: 0; width: 100%; border: none; border-left: 3px solid var(--gray-200); background: #fafbfd; padding: 6px 10px; font: italic 12px/1.4 'DM Sans', sans-serif; color: var(--gray-600); resize: none; outline: none; display: block; overflow: hidden; }
+  .out-note:focus { border-left-color: var(--light-blue); }
+  .out-note-fallback { color: var(--gray-400); }
+  .out-teacher-note { margin: 0 0 8px; }
+  @media print { .out-note:placeholder-shown { display: none; } }
   .output-period-line {
     padding: 3px 0 3px 20px;
     font-size: 11px;
@@ -413,6 +433,7 @@
   .sub-plan-note:focus { border-left-color: var(--light-blue); background: var(--light-blue-bg); }
   .sub-plan-note::placeholder { color: var(--gray-400); }
   .output-warning {
+    font-family: 'DM Sans', sans-serif;
     color: var(--red);
     font-weight: bold;
     margin-top: 16px;
@@ -3631,6 +3652,7 @@ async function updateRosterAfterRun(newEntries, dateStr) {
 //  OUTPUT RENDERING
 // ═══════════════════════════════════════════════════════
 
+let _outputData = null;
 function renderOutput(assignments, unassigned, conflicts, dateStr, lockedCount, outsideSubCount) {
   const d = new Date(dateStr + 'T00:00:00');
   const dayLong = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
@@ -3700,116 +3722,120 @@ function renderOutput(assignments, unassigned, conflicts, dateStr, lockedCount, 
     outsideSubByLabel[label].push(a);
   });
 
-  // Helper: render a block for an absent teacher's staff-covered periods
-  function renderTeacherBlock(teacher, periods) {
-    var teacherKey = 'teacher_' + teacher.replace(/[^a-z0-9]/gi, '_');
-    var teacherNote = savedNotes[teacherKey] || '';
+  // Kept for Copy Assignment, which builds the email from this data and the
+  // saved notes rather than from the on-screen layout.
+  _outputData = { dateStr: dateStr, staffByTeacher: staffByTeacher, outsideSubByLabel: outsideSubByLabel };
 
-    var header = document.createElement('div');
-    header.className = 'output-absent-header';
-    header.textContent = 'For: ' + teacher;
-    outputDoc.appendChild(header);
+  // A note box: shown when it has text, otherwise hidden behind a "+ note"
+  // button so empty boxes don't crowd out who's covering what.
+  function makeNote(key, value, label, opts) {
+    opts = opts || {};
+    var ta = document.createElement('textarea');
+    ta.className = 'out-note' + (opts.fallback ? ' out-note-fallback' : '');
+    ta.rows = 1;
+    ta.value = value;
+    ta.placeholder = label + '...';
+    ta.setAttribute('aria-label', label);
+    ta.dataset.noteKey = key;
+    ta.dataset.noteDate = dateStr;
+    ta.addEventListener('focus', function() { this.classList.remove('out-note-fallback'); });
+    ta.oninput = function() { this.classList.remove('out-note-fallback'); saveSubPlanNote(this); };
+    return ta;
+  }
+  function addNoteButton(label, onClick) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn out-add';
+    b.textContent = label;
+    b.onclick = onClick;
+    return b;
+  }
+  function autoSize(ta) { requestAnimationFrame(function() { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }); }
+  function classCell(a) {
+    return esc(a.courseName || '') + (a.sectionNumber ? ' · ' + esc(a.sectionNumber) : '');
+  }
+  function roomOf(a) { return a.roomNumber ? esc(a.roomNumber.replace(/^Room\s*/i, '').trim()) : ''; }
 
-    var sp = document.createElement('div');
-    sp.style.height = '12px';
-    outputDoc.appendChild(sp);
+  // One table per absent teacher (or per outside sub). Each row can open a
+  // note row directly underneath it.
+  function renderBlock(headerText, noteKeyForHeader, headerNoteLabel, headerNoteValue, rows, lastColTitle, cellFor, rowNote) {
+    var head = document.createElement('div');
+    head.className = 'out-teacher';
+    var h = document.createElement('h3');
+    h.textContent = headerText;
+    head.appendChild(h);
+    outputDoc.appendChild(head);
 
-    var tNote = document.createElement('textarea');
-    tNote.rows = 1;
-    tNote.placeholder = 'Overall notes for ' + teacher + ' (optional)...';
-    tNote.value = teacherNote;
-    tNote.dataset.noteKey = teacherKey;
-    tNote.dataset.noteDate = dateStr;
-    tNote.style.cssText = 'width:calc(100% - 32px);margin:4px 0 10px 32px;padding:3px 8px;border:none;border-left:2px solid #6699cc;background:transparent;font-size:10px;font-style:italic;color:#4d6480;resize:none;outline:none;display:block;';
-    tNote.oninput = function() { saveSubPlanNote(this); };
-    outputDoc.appendChild(tNote);
+    if (noteKeyForHeader) {
+      var tNote = makeNote(noteKeyForHeader, headerNoteValue, headerNoteLabel);
+      tNote.classList.add('out-teacher-note');
+      if (!headerNoteValue) tNote.style.display = 'none';
+      head.appendChild(addNoteButton('+ note for ' + headerText, function() { tNote.style.display = 'block'; tNote.focus(); this.remove(); }));
+      if (headerNoteValue) head.lastChild.remove();
+      outputDoc.appendChild(tNote);
+      if (headerNoteValue) autoSize(tNote);
+    }
 
-    periods.sort(function(a,b){ return a.period - b.period; }).forEach(function(a) {
-      var room = a.roomNumber ? ', Room ' + esc(a.roomNumber.replace(/^Room\s*/i, '').trim()) : '';
-      var section = a.sectionNumber ? ', ' + esc(a.sectionNumber) : '';
-      var unassigned = isUnassigned(a.coveringTeacher);
-
-      var periodDiv = document.createElement('div');
-      periodDiv.style.cssText = 'padding:4px 0;font-size:11px;margin-top:8px;' + (unassigned ? 'color:red;' : '');
-      var reasonAttr = a.assignReason ? ` class="assign-reason" data-reason="${esc(a.assignReason)}"` : '';
-      periodDiv.innerHTML = '<strong>Period ' + a.period + ':</strong> ' + esc(a.courseName) + section + room + ' - <strong><span' + reasonAttr + '>' + esc(a.coveringTeacher) + '</span></strong>';
-      outputDoc.appendChild(periodDiv);
-
-      var periodKey = 'period_' + teacher.replace(/[^a-z0-9]/gi, '_') + '_' + a.period;
-      var periodNote = savedNotes[periodKey] || '';
-      var pNote = document.createElement('textarea');
-      pNote.rows = 1;
-      pNote.placeholder = 'Notes for Period ' + a.period + ' (optional)...';
-      pNote.value = periodNote;
-      pNote.dataset.noteKey = periodKey;
-      pNote.dataset.noteDate = dateStr;
-      pNote.style.cssText = 'width:calc(100% - 32px);margin:4px 0 10px 32px;padding:3px 8px;border:none;border-left:2px solid #6699cc;background:transparent;font-size:10px;font-style:italic;color:#4d6480;resize:none;outline:none;display:block;';
-      pNote.oninput = function() { saveSubPlanNote(this); };
-      outputDoc.appendChild(pNote);
+    var table = document.createElement('table');
+    table.className = 'out-table';
+    table.innerHTML = '<colgroup><col style="width:44px"><col><col style="width:90px"><col style="width:240px"><col style="width:120px"></colgroup>'
+      + '<thead><tr><th>P</th><th>Class</th><th>Room</th><th>' + lastColTitle + '</th><th><span class="sr-only">Notes</span></th></tr></thead>';
+    var tbody = document.createElement('tbody');
+    rows.sort(function(a, b) { return a.period - b.period; }).forEach(function(a) {
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td class="out-p">' + a.period + '</td><td>' + classCell(a) + '</td><td>' + roomOf(a) + '</td>' + cellFor(a) + '<td class="out-n"></td>';
+      tbody.appendChild(tr);
+      var n = rowNote(a);
+      var noteTr = document.createElement('tr');
+      noteTr.className = 'out-note-row';
+      var noteTd = document.createElement('td');
+      noteTd.colSpan = 5;
+      var ta = makeNote(n.key, n.value, 'Notes for Period ' + a.period, { fallback: n.fallback });
+      noteTd.appendChild(ta);
+      noteTr.appendChild(noteTd);
+      if (!n.value) noteTr.style.display = 'none';
+      else autoSize(ta);
+      tbody.appendChild(noteTr);
+      if (!n.value) {
+        tr.lastChild.appendChild(addNoteButton('+ note', function() { noteTr.style.display = ''; ta.focus(); this.remove(); }));
+      }
     });
-
-    var spacer = document.createElement('div');
-    spacer.style.height = '20px';
-    outputDoc.appendChild(spacer);
+    table.appendChild(tbody);
+    outputDoc.appendChild(table);
   }
 
-  // Render staff blocks
+  // Staff-covered periods, grouped by absent teacher
   Object.entries(staffByTeacher).forEach(function(entry) {
-    renderTeacherBlock(entry[0], entry[1]);
+    var teacher = entry[0];
+    var teacherKey = 'teacher_' + teacher.replace(/[^a-z0-9]/gi, '_');
+    renderBlock(teacher, teacherKey, 'Overall notes for ' + teacher, savedNotes[teacherKey] || '', entry[1], 'Covered by',
+      function(a) {
+        var reasonAttr = a.assignReason ? ' class="assign-reason" data-reason="' + esc(a.assignReason) + '"' : '';
+        if (isUnassigned(a.coveringTeacher)) {
+          return '<td class="out-cov out-unassigned"><span' + reasonAttr + '>' + esc(a.coveringTeacher) + '</span>'
+            + (a.assignReason ? '<span class="out-why">' + esc(a.assignReason) + '</span>' : '') + '</td>';
+        }
+        return '<td class="out-cov"><span' + reasonAttr + '>' + esc(a.coveringTeacher) + '</span></td>';
+      },
+      function(a) {
+        var key = 'period_' + teacher.replace(/[^a-z0-9]/gi, '_') + '_' + a.period;
+        return { key: key, value: savedNotes[key] || '' };
+      });
   });
 
-  // Render outside sub sections
+  // Outside sub sections: one block per sub, listing whose class each period is
   if (outsideSubAssignments.length > 0) {
-    var divider = document.createElement('hr');
-    divider.className = 'divider';
-    outputDoc.appendChild(divider);
-
-    // Sort labels: Outside Sub, Outside Sub 1, Outside Sub 2
-    var subLabels = Object.keys(outsideSubByLabel).sort();
-    subLabels.forEach(function(label) {
-      var periods = outsideSubByLabel[label];
-
-      var subHeader = document.createElement('div');
-      subHeader.className = 'output-absent-header';
-      subHeader.style.color = 'var(--navy)';
-      subHeader.textContent = label;
-      outputDoc.appendChild(subHeader);
-
-      var sp = document.createElement('div');
-      sp.style.height = '8px';
-      outputDoc.appendChild(sp);
-
-      periods.sort(function(a,b){ return a.period - b.period; }).forEach(function(a) {
-        var room = a.roomNumber ? ', Room ' + esc(a.roomNumber.replace(/^Room\s*/i, '').trim()) : '';
-        var section = a.sectionNumber ? ', ' + esc(a.sectionNumber) : '';
-
-        var periodDiv = document.createElement('div');
-        periodDiv.style.cssText = 'padding:4px 0;font-size:11px;margin-top:8px;';
-        periodDiv.innerHTML = '<strong>Period ' + a.period + ':</strong> ' + esc(a.courseName) + section + room + ' (for ' + esc(a.absentTeacher) + ')';
-        outputDoc.appendChild(periodDiv);
-
-        var periodKey = 'outsub_' + label.replace(/\s/g,'_') + '_period_' + a.period + '_' + a.absentTeacher.replace(/[^a-z0-9]/gi,'_');
-        var teacherKey = 'teacher_' + a.absentTeacher.replace(/[^a-z0-9]/gi, '_');
-        var staffPeriodKey = 'period_' + a.absentTeacher.replace(/[^a-z0-9]/gi, '_') + '_' + a.period;
-        // Fallback: period-level note → teacher-level note → empty
-        var savedPeriodNote = savedNotes[periodKey] || '';
-        var fallbackNote = !savedPeriodNote ? (savedNotes[staffPeriodKey] || savedNotes[teacherKey] || '') : '';
-        var pNote = document.createElement('textarea');
-        pNote.rows = 1;
-        pNote.placeholder = 'Notes for Period ' + a.period + ' (optional)...';
-        pNote.value = savedPeriodNote || fallbackNote;
-        if (!savedPeriodNote && fallbackNote) pNote.style.color = 'var(--gray-400)'; // visual hint it's a fallback
-        pNote.dataset.noteKey = periodKey;
-        pNote.dataset.noteDate = dateStr;
-        pNote.style.cssText = 'width:calc(100% - 32px);margin:4px 0 10px 32px;padding:3px 8px;border:none;border-left:2px solid #6699cc;background:transparent;font-size:10px;font-style:italic;color:' + (!savedPeriodNote && fallbackNote ? 'var(--gray-400)' : '#4d6480') + ';resize:none;outline:none;display:block;';
-        pNote.addEventListener('focus', function() { this.style.color = '#4d6480'; }); // darken on edit
-        pNote.oninput = function() { this.style.color = '#4d6480'; saveSubPlanNote(this); };
-        outputDoc.appendChild(pNote);
-      });
-
-      var spacer = document.createElement('div');
-      spacer.style.height = '20px';
-      outputDoc.appendChild(spacer);
+    Object.keys(outsideSubByLabel).sort().forEach(function(label) {
+      renderBlock(label, null, '', '', outsideSubByLabel[label], 'For',
+        function(a) { return '<td>' + esc(a.absentTeacher) + '</td>'; },
+        function(a) {
+          // Fallback: period-level note, then the staff period note, then
+          // the absent teacher's overall note (shown greyed until edited)
+          var key = 'outsub_' + label.replace(/\s/g, '_') + '_period_' + a.period + '_' + a.absentTeacher.replace(/[^a-z0-9]/gi, '_');
+          var own = savedNotes[key] || '';
+          var fallback = own ? '' : (savedNotes['period_' + a.absentTeacher.replace(/[^a-z0-9]/gi, '_') + '_' + a.period] || savedNotes['teacher_' + a.absentTeacher.replace(/[^a-z0-9]/gi, '_')] || '');
+          return { key: key, value: own || fallback, fallback: !own && !!fallback };
+        });
     });
   }
 
@@ -3859,69 +3885,57 @@ function saveEmailTemplate() {
 
 function copyFullAssignment() {
   const doc = document.getElementById('output-doc');
-  if (!doc) return;
+  if (!doc || !_outputData) return;
 
   const htmlLines = [];
   const textLines = [];
+  const notes = JSON.parse(localStorage.getItem('cs_notes_' + _outputData.dateStr) || '{}');
+  const keyName = n => String(n).replace(/[^a-z0-9]/gi, '_');
+  const line = a => `${a.courseName || ''}${a.sectionNumber ? ', ' + a.sectionNumber : ''}${a.roomNumber ? ', Room ' + a.roomNumber.replace(/^Room\s*/i, '').trim() : ''}`;
+  const addNote = n => { if (n && n.trim()) { htmlLines.push('<i style="color:#666;font-size:11px">' + esc(n.trim()) + '</i><br>'); textLines.push('  ' + n.trim()); } };
 
   // Email template
   const emailEl = doc.querySelector('#email-template-text');
   if (emailEl) {
     const emailText = emailEl.value.trim();
-    htmlLines.push(emailText + '<br><br>');
+    htmlLines.push(esc(emailText) + '<br><br>');
     textLines.push(emailText, '');
   }
 
-  // Walk through all children of output-doc
-  // Structure: absent-header div, spacer, textarea (teacher note), period divs, period textareas, spacer
-  const children = Array.from(doc.children);
-  let i = 0;
-  while (i < children.length) {
-    const el = children[i];
-    if (el.className === 'output-absent-header') {
-      const teacherName = el.textContent.trim();
-      htmlLines.push('<b>' + teacherName + '</b>');
-      textLines.push(teacherName);
-      i++;
-      // Skip spacer div
-      if (children[i] && children[i].tagName === 'DIV' && !children[i].className) i++;
-      // Teacher note textarea
-      if (children[i] && children[i].tagName === 'TEXTAREA' && children[i].value.trim()) {
-        htmlLines.push('<i>' + children[i].value.trim() + '</i>');
-        textLines.push(children[i].value.trim());
-        i++;
-      } else if (children[i] && children[i].tagName === 'TEXTAREA') {
-        i++;
-      }
-      htmlLines.push('<br>');
-      textLines.push('');
-      // Period divs and notes
-      while (i < children.length && children[i].className !== 'output-absent-header') {
-        const c = children[i];
-        if (c.tagName === 'DIV' && c.innerHTML.includes('<strong>Period')) {
-          const text = c.textContent.trim().replace(/\s+/g, ' ');
-          const mStaff = text.match(/^Period (\d+): (.+) - (.+)$/);
-          if (mStaff) {
-            htmlLines.push('<b>Period ' + mStaff[1] + ':</b> ' + mStaff[2] + ' - <b>' + mStaff[3] + '</b><br>');
-            textLines.push('Period ' + mStaff[1] + ': ' + mStaff[2] + ' - ' + mStaff[3]);
-          } else {
-            const pNum = (text.match(/^Period (\d+)/) || ['','?'])[1];
-            const rest = text.replace(/^Period \d+: /, '');
-            htmlLines.push('<b>Period ' + pNum + ':</b> ' + rest + '<br>');
-            textLines.push(text);
-          }
-        } else if (c.tagName === 'TEXTAREA' && c.value.trim()) {
-          htmlLines.push('<i style="color:#666;font-size:11px">' + c.value.trim() + '</i><br>');
-          textLines.push('  ' + c.value.trim());
-        }
-        i++;
-      }
-      htmlLines.push('<br>');
-      textLines.push('');
-    } else {
-      i++;
-    }
-  }
+  // One block per absent teacher, same text as before the on-screen
+  // layout changed: "For: Name", their note, then one line per period.
+  Object.entries(_outputData.staffByTeacher).forEach(([teacher, periods]) => {
+    htmlLines.push('<b>For: ' + esc(teacher) + '</b>');
+    textLines.push('For: ' + teacher);
+    const tNote = (notes['teacher_' + keyName(teacher)] || '').trim();
+    if (tNote) { htmlLines.push('<i>' + esc(tNote) + '</i>'); textLines.push(tNote); }
+    htmlLines.push('<br>');
+    textLines.push('');
+    periods.slice().sort((a, b) => a.period - b.period).forEach(a => {
+      htmlLines.push('<b>Period ' + a.period + ':</b> ' + esc(line(a)) + ' - <b>' + esc(a.coveringTeacher) + '</b><br>');
+      textLines.push('Period ' + a.period + ': ' + line(a) + ' - ' + a.coveringTeacher);
+      addNote(notes['period_' + keyName(teacher) + '_' + a.period]);
+    });
+    htmlLines.push('<br>');
+    textLines.push('');
+  });
+
+  // Outside subs
+  Object.keys(_outputData.outsideSubByLabel).sort().forEach(label => {
+    htmlLines.push('<b>' + esc(label) + '</b>');
+    textLines.push(label);
+    htmlLines.push('<br>');
+    textLines.push('');
+    _outputData.outsideSubByLabel[label].slice().sort((a, b) => a.period - b.period).forEach(a => {
+      const rest = line(a) + ' (for ' + a.absentTeacher + ')';
+      htmlLines.push('<b>Period ' + a.period + ':</b> ' + esc(rest) + '<br>');
+      textLines.push('Period ' + a.period + ': ' + rest);
+      const own = notes['outsub_' + label.replace(/\s/g, '_') + '_period_' + a.period + '_' + keyName(a.absentTeacher)];
+      addNote(own || notes['period_' + keyName(a.absentTeacher) + '_' + a.period] || notes['teacher_' + keyName(a.absentTeacher)]);
+    });
+    htmlLines.push('<br>');
+    textLines.push('');
+  });
 
   const htmlContent = htmlLines.join('\n');
   const textContent = textLines.join('\n').trim();

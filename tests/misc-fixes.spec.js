@@ -344,4 +344,54 @@ test.describe('Misc regression fixes', () => {
     await page.evaluate(() => openTeacherModal());
     await expect(page.getByRole('button', { name: 'Delete Teacher' })).toBeHidden();
   });
+  test('coverage results: one compact row per period, notes hidden until "+ note", and Copy Assignment text unchanged', async ({ page }) => {
+    await gotoApp(page);
+    page.on('dialog', d => d.accept());
+    await page.evaluate(() => {
+      const t = (id, name) => ({ id, name, tier: '1', highAvail: false, excluded: false,
+        avail: { Monday: [1, 2], Tuesday: [], Wednesday: [], Thursday: [], Friday: [] },
+        lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0 });
+      setRoster([t('t1', 'Jane Smith'), t('t2', 'Amy Lee')]);
+      setLog([]);
+      localStorage.setItem('cs_notes_2026-06-01', JSON.stringify({ period_Bob_Jones_2: 'Plans on desk' }));
+      document.getElementById('run-date').value = '2026-06-01';
+      renderAbsencesTable();
+      const fill = (row, p, course) => {
+        row.querySelector('.abs-teacher').value = '__custom__';
+        row.querySelector('.abs-teacher-custom').value = 'Bob Jones';
+        row.querySelector('.abs-period').value = String(p);
+        row.querySelector('.abs-course').value = course;
+        row.querySelector('.abs-section').value = 'MTH 9-' + p;
+        row.querySelector('.abs-room').value = '10' + p;
+      };
+      fill(document.querySelector('#absences-tbody tr'), 1, 'Algebra');
+      addAbsenceRow();
+      fill(document.querySelectorAll('#absences-tbody tr')[1], 2, 'Geometry');
+      runCoverage();
+    });
+
+    const rows = page.locator('#output-doc .out-table tbody tr:not(.out-note-row)');
+    await expect(rows).toHaveCount(2);
+    await expect(rows.first()).toContainText('Algebra · MTH 9-1');
+    await expect(page.locator('#output-doc .out-teacher h3')).toHaveText(['Bob Jones']);
+
+    // Empty notes are hidden behind buttons; a saved note shows
+    await expect(page.locator('#output-doc .out-note:visible')).toHaveCount(1);
+    await expect(page.locator('#output-doc .out-note:visible')).toHaveValue('Plans on desk');
+    await page.getByRole('button', { name: '+ note for Bob Jones' }).click();
+    await page.getByLabel('Overall notes for Bob Jones').fill('Out all day');
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cs_notes_2026-06-01')).teacher_Bob_Jones)).toBe('Out all day');
+
+    const copied = await page.evaluate(async () => {
+      let text = null;
+      navigator.clipboard.write = async (items) => { text = await (await items[0].getType('text/plain')).text(); };
+      copyFullAssignment();
+      await new Promise(r => setTimeout(r, 50));
+      return text;
+    });
+    const covering = await page.evaluate(() => getLog().sort((a, b) => a.period - b.period).map(e => e.coveringTeacher));
+    expect(copied).toContain('For: Bob Jones\nOut all day\n\n');
+    expect(copied).toContain(`Period 1: Algebra, MTH 9-1, Room 101 - ${covering[0]}`);
+    expect(copied).toContain(`Period 2: Geometry, MTH 9-2, Room 102 - ${covering[1]}\n  Plans on desk`);
+  });
 });
