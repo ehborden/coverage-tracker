@@ -399,12 +399,13 @@
   .out-table td.out-unassigned { color: var(--red); }
   .out-table .out-why { display: block; font-weight: 400; font-size: 11px; color: var(--gray-600); }
   .out-table td.out-n { text-align: right; }
-  .out-table tr.out-note-row td { padding-top: 0; border-top: none; }
+  .out-table tr.out-note-row td { padding: 0 10px 12px; }
+  .out-table tr.has-note td { border-bottom: none; }
   .out-table tr.out-note-row:hover td, .out-table tr:hover td { background: none; }
   .btn.out-add { background: none; border: none; padding: 2px 4px; font-size: 12px; font-weight: 600; color: var(--navy); }
   .btn.out-add:hover { text-decoration: underline; }
-  .out-note { min-height: 0; width: 100%; border: none; border-left: 3px solid var(--gray-200); background: #fafbfd; padding: 6px 10px; font: italic 12px/1.4 'DM Sans', sans-serif; color: var(--gray-600); resize: none; outline: none; display: block; overflow: hidden; }
-  .out-note:focus { border-left-color: var(--light-blue); }
+  .out-note { min-height: 0; width: 100%; border: none; border-left: 3px solid var(--gray-200); border-radius: 0 4px 4px 0; background: #fafbfd; padding: 7px 12px; font: italic 13px/1.5 'DM Sans', sans-serif; color: var(--gray-600); resize: none; outline: none; display: block; overflow: hidden; field-sizing: content; }
+  .out-note:focus { border-left-color: var(--light-blue); border-color: transparent; border-left-color: var(--light-blue); }
   .out-note-fallback { color: var(--gray-400); }
   .out-teacher-note { margin: 0 0 8px; }
   @media print { .out-note:placeholder-shown { display: none; } }
@@ -3594,6 +3595,7 @@ async function runCoverage() {
   renderOutput(primaryResult.assignments, primaryResult.unassigned, primaryResult.conflicts, dateStr, primaryResult.lockedCount, outsideSubCount);
   document.getElementById('output-area').dataset.outputDate = dateStr;
   document.getElementById('output-area').style.display = 'block';
+  document.querySelectorAll('#output-doc .out-note').forEach(resizeOutNote);
   document.getElementById('output-area').scrollIntoView({ behavior: 'smooth' });
 
   if (unmatchedByDate.length > 0) {
@@ -3750,7 +3752,7 @@ function renderOutput(assignments, unassigned, conflicts, dateStr, lockedCount, 
     b.onclick = onClick;
     return b;
   }
-  function autoSize(ta) { requestAnimationFrame(function() { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }); }
+  function autoSize(ta) { requestAnimationFrame(function() { resizeOutNote(ta); }); }
   function classCell(a) {
     return esc(a.courseName || '') + (a.sectionNumber ? ' · ' + esc(a.sectionNumber) : '');
   }
@@ -3788,16 +3790,17 @@ function renderOutput(assignments, unassigned, conflicts, dateStr, lockedCount, 
       var n = rowNote(a);
       var noteTr = document.createElement('tr');
       noteTr.className = 'out-note-row';
+      noteTr.appendChild(document.createElement('td'));
       var noteTd = document.createElement('td');
-      noteTd.colSpan = 5;
+      noteTd.colSpan = 4;
       var ta = makeNote(n.key, n.value, 'Notes for Period ' + a.period, { fallback: n.fallback });
       noteTd.appendChild(ta);
       noteTr.appendChild(noteTd);
       if (!n.value) noteTr.style.display = 'none';
-      else autoSize(ta);
+      else { tr.classList.add('has-note'); autoSize(ta); }
       tbody.appendChild(noteTr);
       if (!n.value) {
-        tr.lastChild.appendChild(addNoteButton('+ note', function() { noteTr.style.display = ''; ta.focus(); this.remove(); }));
+        tr.lastChild.appendChild(addNoteButton('+ note', function() { noteTr.style.display = ''; tr.classList.add('has-note'); ta.focus(); this.remove(); }));
       }
     });
     table.appendChild(tbody);
@@ -3852,6 +3855,16 @@ function renderOutput(assignments, unassigned, conflicts, dateStr, lockedCount, 
 // is now just what End Date (for range) does automatically — see
 // rowsForRangeDay above — so there's no longer a separate flow for it.
 
+// Grows a results note box to fit its text. Chrome/Edge do this in CSS
+// (field-sizing: content); elsewhere it's measured, which only works once
+// the results are visible, so runCoverage calls it again after showing them.
+function resizeOutNote(ta) {
+  if (window.CSS && CSS.supports && CSS.supports('field-sizing', 'content')) return;
+  if (!ta.offsetParent) return;
+  ta.style.height = 'auto';
+  ta.style.height = ta.scrollHeight + 'px';
+}
+
 function saveSubPlanNote(el) {
   const dateStr = el.dataset.noteDate;
   const key = el.dataset.noteKey;
@@ -3859,8 +3872,8 @@ function saveSubPlanNote(el) {
   notes[key] = el.value;
   localStorage.setItem('cs_notes_' + dateStr, JSON.stringify(notes));
   // Auto-resize
-  el.style.height = 'auto';
-  el.style.height = el.scrollHeight + 'px';
+  if (el.classList.contains('out-note')) resizeOutNote(el);
+  else { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
 }
 
 function saveEmailTemplate() {
