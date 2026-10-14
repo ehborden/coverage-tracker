@@ -676,25 +676,19 @@
       <button class="nav-btn active" onclick="showScreen('run')">Run Coverage</button>
       <button class="nav-btn" onclick="showScreen('roster')">Roster</button>
       <button class="nav-btn" onclick="showScreen('summary')">Log</button>
+      <button class="nav-btn" id="settings-gear" onclick="openSettingsModal()" aria-label="Settings" title="Settings" style="display:inline-flex;align-items:center;padding:8px 10px">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+      </button>
     </nav>
     <nav class="nav" id="nav-data" aria-label="Data navigation" style="opacity:0.85">
       <button class="nav-btn" onclick="showScreen('schedule')">Schedule</button>
       <button class="nav-btn" onclick="showScreen('roomchart')">Room Chart</button>
       <div style="position:relative;display:inline-block">
         <button class="nav-btn" onclick="toggleDataMenu()" id="data-menu-btn">Data ▾</button>
-        <div id="data-menu" style="display:none;position:absolute;right:0;top:100%;background:var(--navy-dark);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);min-width:140px;z-index:200;padding:4px 0">
-          <button onclick="exportToExcel();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:white;font-family:inherit;font-size:13px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Excel Export</button>
-          <button onclick="exportAllData();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:white;font-family:inherit;font-size:13px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Backup</button>
-          <label style="display:block;width:100%;text-align:left;padding:8px 16px;color:white;font-family:inherit;font-size:13px;font-weight:400;text-transform:none;letter-spacing:normal;margin-bottom:0;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Restore
-            <input type="file" accept=".json" style="display:none" onchange="importAllData(event);toggleDataMenu()" />
-          </label>
-          <div style="height:1px;background:rgba(255,255,255,0.15);margin:4px 0"></div>
-          <button onclick="openSyncModal();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:white;font-family:inherit;font-size:13px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Connect with GitHub</button>
-          <button onclick="openRestoreGithubModal();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:white;font-family:inherit;font-size:13px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Restore from GitHub</button>
-          <div style="height:1px;background:rgba(255,255,255,0.15);margin:4px 0"></div>
-          <button onclick="openSettingsModal();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:white;font-family:inherit;font-size:13px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Settings</button>
-          <button onclick="startNewYear();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:white;font-family:inherit;font-size:13px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Start New Year</button>
-          <button onclick="clearRoster();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:#ff9d9d;font-family:inherit;font-size:13px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Clear Roster</button>
+        <div id="data-menu" style="display:none;position:absolute;right:0;top:100%;background:var(--navy-dark);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);min-width:180px;z-index:200;padding:4px 0">
+          <button onclick="exportAllData();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:white;font-family:inherit;font-size:13px;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Backup</button>
+          <button onclick="openRestoreChoice();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:white;font-family:inherit;font-size:13px;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Restore</button>
+          <button onclick="exportToExcel();toggleDataMenu()" style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:white;font-family:inherit;font-size:13px;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Excel Export</button>
         </div>
       </div>
     </nav>
@@ -740,7 +734,7 @@
           </select>
         </div>
       </div>
-      <div id="senior-note" style="display:none;margin-top:8px;font-size:12px;color:var(--amber)">Senior classes ended: 12th grade classes are skipped when adding absences. Change in Data → Settings.</div>
+      <div id="senior-note" style="display:none;margin-top:8px;font-size:12px;color:var(--amber)">Senior classes ended: 12th grade classes are skipped when adding absences. Change in Settings (gear, top right).</div>
       <div id="outside-sub-avail-area"></div>
 
       <!-- Absences table -->
@@ -1191,18 +1185,51 @@
 </div>
 
 <div class="modal-overlay" id="settings-modal">
-  <div class="modal" style="max-width:440px" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
+  <div class="modal" style="max-width:480px" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
     <div class="modal-title" id="settings-modal-title">Settings</div>
-    <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;text-transform:none;letter-spacing:0">
+
+    <div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--gray-600);margin:4px 0 8px">Display</div>
+    <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;text-transform:none;letter-spacing:0;margin-bottom:12px">
       <input type="checkbox" id="setting-show-tiers" onchange="setHistoryShowTiers(this.checked)" style="width:auto;margin-top:2px" />
       <span><strong>Show tiers on Log</strong><br><span style="color:var(--gray-600)">Adds the tier column and tier colors to the totals and weekly grid. Only affects this computer.</span></span>
     </label>
-    <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;text-transform:none;letter-spacing:0;margin-top:14px">
+
+    <div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--gray-600);margin:18px 0 8px">Spring</div>
+    <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;text-transform:none;letter-spacing:0;margin-bottom:12px">
       <input type="checkbox" id="senior-classes-ended" onchange="saveSeniorClassesFlag()" style="width:auto;margin-top:2px" />
-      <span><strong>Senior classes ended</strong><br><span style="color:var(--gray-600)">For spring, once seniors are done: their 12th grade classes start unchecked when adding an absence, so they don't get a sub. Shared with every synced computer. Start New Year turns it off.</span></span>
+      <span><strong>Senior classes ended</strong><br><span style="color:var(--gray-600)">Once seniors are done: their 12th grade classes start unchecked when adding an absence, so they don't get a sub. Shared with every synced computer. Start New Year turns it off.</span></span>
     </label>
+
+    <div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--gray-600);margin:18px 0 8px">Sync</div>
+    <button class="btn btn-ghost btn-sm" onclick="closeSettingsModal();openSyncModal()">Connect with GitHub</button>
+    <div style="font-size:12px;color:var(--gray-600);margin-top:4px">Same as clicking the Sync button in the header.</div>
+
+    <div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--gray-600);margin:18px 0 8px">Once a year</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="closeSettingsModal();startNewYear()">Start New Year</button>
+      <button class="btn btn-danger btn-sm" onclick="closeSettingsModal();clearRoster()">Clear Roster</button>
+    </div>
+    <div style="font-size:12px;color:var(--gray-600);margin-top:4px">Both ask before changing anything.</div>
+
     <div class="flex-end mt-20">
       <button class="btn btn-primary" onclick="closeSettingsModal()">Done</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="restore-choice-modal">
+  <div class="modal" style="max-width:440px" role="dialog" aria-modal="true" aria-labelledby="restore-choice-title">
+    <div class="modal-title" id="restore-choice-title">Restore</div>
+    <p style="color:var(--gray-600);font-size:13px;margin-bottom:14px">Restore replaces everything in this browser with the backup. It doesn't merge.</p>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <label class="btn btn-ghost" style="cursor:pointer;justify-content:center;text-transform:none;letter-spacing:0">
+        From a backup file on this computer
+        <input type="file" accept=".json" style="display:none" onchange="closeRestoreChoice();importAllData(event)" />
+      </label>
+      <button class="btn btn-ghost" onclick="closeRestoreChoice();openRestoreGithubModal()">From a weekly GitHub backup <span id="restore-choice-github-note" style="font-weight:400;color:var(--gray-600)"></span></button>
+    </div>
+    <div class="flex-end mt-20">
+      <button class="btn btn-ghost" onclick="closeRestoreChoice()">Cancel</button>
     </div>
   </div>
 </div>
@@ -4298,7 +4325,7 @@ function setDetailedLogOpen(open) {
   if (arrow) arrow.textContent = open ? '▾' : '▸';
 }
 
-// Tiers are hidden on the Log tab unless turned on in Data → Settings. A
+// Tiers are hidden on the Log tab unless turned on in Settings (gear icon). A
 // per-browser preference, remembered across reloads on this computer
 // only. Hidden tiers also mean no sorting by tier, since a list grouped
 // by tier would give them away anyway.
@@ -4323,6 +4350,15 @@ function openSettingsModal() {
   document.getElementById('settings-modal').classList.add('open');
 }
 function closeSettingsModal() { document.getElementById('settings-modal').classList.remove('open'); }
+
+// Data → Restore: one menu item, then a choice between a backup file and
+// one of the weekly GitHub backups (which needs sync on; without it, that
+// button opens Connect with GitHub instead, same as before).
+function openRestoreChoice() {
+  document.getElementById('restore-choice-github-note').textContent = syncOn() ? '' : '(needs GitHub sync)';
+  document.getElementById('restore-choice-modal').classList.add('open');
+}
+function closeRestoreChoice() { document.getElementById('restore-choice-modal').classList.remove('open'); }
 
 function clearLog() {
   if (!confirm('Clear the entire coverage log? This cannot be undone.')) return;
@@ -6211,7 +6247,7 @@ function loadSeniorClassesFlag() {
   updateSeniorNote();
 }
 
-// The checkbox lives in Data → Settings, out of sight, so Run Coverage
+// The checkbox lives in Settings (gear icon), out of sight, so Run Coverage
 // shows a one-line reminder whenever it's on.
 function updateSeniorNote() {
   const note = document.getElementById('senior-note');
