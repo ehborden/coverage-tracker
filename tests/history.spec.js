@@ -23,7 +23,7 @@ test.describe('Log tab (old Summary + Log)', () => {
   test('the Log tab is gone, and the detailed log sits collapsed at the bottom of the Log tab', async ({ page }) => {
     await gotoApp(page);
     await seedHistory(page);
-    await expect(page.locator('#nav-main .nav-btn')).toHaveText(['Run Coverage', 'Roster', 'Log']);
+    await expect(page.locator('#nav-main .nav-btn:not(#settings-gear)')).toHaveText(['Run Coverage', 'Roster', 'Log']);
     await expect(page.locator('#detailed-log-body')).toBeHidden();
     await expect(page.locator('#detailed-log-toggle')).toContainText('(3)');
 
@@ -59,7 +59,6 @@ test.describe('Log tab (old Summary + Log)', () => {
     expect(bg).toBe('rgba(0, 0, 0, 0)');
     await expect(page.locator('#summary-tbody tr').first()).toContainText('Amy Lee'); // alphabetical, not by tier
 
-    await page.locator('#data-menu-btn').click();
     await page.getByRole('button', { name: 'Settings' }).click();
     await page.getByLabel(/Show tiers on Log/).check();
     await page.locator('#settings-modal').getByRole('button', { name: 'Done' }).click();
@@ -75,7 +74,6 @@ test.describe('Log tab (old Summary + Log)', () => {
     await expect(page.locator('#screen-run #senior-classes-ended')).toHaveCount(0);
     await expect(page.locator('#senior-note')).toBeHidden();
 
-    await page.locator('#data-menu-btn').click();
     await page.getByRole('button', { name: 'Settings' }).click();
     await page.getByLabel(/Senior classes ended/).check();
     await page.locator('#settings-modal').getByRole('button', { name: 'Done' }).click();
@@ -85,5 +83,22 @@ test.describe('Log tab (old Summary + Log)', () => {
     await page.reload();
     await page.waitForSelector('#run-date');
     await expect(page.locator('#senior-note')).toBeVisible();
+  });
+  test('the Data menu only has Backup, Restore, and Excel Export; Restore offers file or GitHub; the rare and risky items live in Settings', async ({ page }) => {
+    await gotoApp(page);
+    await page.locator('#data-menu-btn').click();
+    await expect(page.locator('#data-menu button')).toHaveText(['Backup', 'Restore', 'Excel Export']);
+
+    await page.locator('#data-menu').getByRole('button', { name: 'Restore' }).click();
+    await expect(page.locator('#restore-choice-modal')).toHaveClass(/open/);
+    await expect(page.locator('#restore-choice-modal')).toContainText('From a backup file on this computer');
+    await expect(page.locator('#restore-choice-modal')).toContainText('From a weekly GitHub backup (needs GitHub sync)');
+    await page.locator('#restore-choice-modal').getByRole('button', { name: 'Cancel' }).click();
+
+    await page.getByRole('button', { name: 'Settings' }).click();
+    const settings = page.locator('#settings-modal');
+    await expect(settings.getByRole('button', { name: 'Connect with GitHub' })).toBeVisible();
+    await expect(settings.getByRole('button', { name: 'Start New Year' })).toBeVisible();
+    await expect(settings.getByRole('button', { name: 'Clear Roster' })).toBeVisible();
   });
 });
