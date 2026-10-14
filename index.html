@@ -107,6 +107,17 @@
   #sync-pill { font-size: 11px; padding: 6px 12px; }
   #sync-pill.ok { color: #9ee6b8; }
   #sync-pill.error, #sync-pill.offline { color: #ffb4b4; }
+  /* Off or failing should be noticeable, not the faintest thing in the header */
+  #sync-pill.off { border: 1px solid rgba(255,255,255,0.45); color: #fff; }
+  #sync-pill.offline { border: 1px solid #ffb4b4; }
+  #sync-pill.error { background: #b42318; color: #fff; font-weight: 600; }
+  /* Roster: free periods as small boxes */
+  .pboxes { display: inline-flex; gap: 2px; }
+  .pbox { width: 12px; height: 16px; border-radius: 2px; font-size: 9px; line-height: 16px; text-align: center; color: transparent; background: var(--gray-100); }
+  #roster-tbody td { white-space: nowrap; padding-left: 6px; padding-right: 6px; }
+  #roster-tbody td:first-child { padding-left: 12px; }
+  #roster-tbody td.avail-cell { padding-left: 4px; padding-right: 4px; }
+  .pbox.on { background: var(--light-blue-bg); color: var(--navy); font-weight: 700; box-shadow: inset 0 0 0 1px var(--light-blue); }
   #sync-pill.busy, #sync-pill.pending { color: var(--gold); }
 
   /* ── MAIN ── */
@@ -668,7 +679,7 @@
 <header class="header">
   <div style="display:flex;align-items:center;gap:14px">
     <h1 class="header-title">Coverage <span>System</span></h1>
-    <button id="undo-btn" class="nav-btn" style="pointer-events:none" onclick="undoLastAction()" title="Nothing to undo yet">↶ Undo</button>
+    <button id="undo-btn" class="nav-btn" style="pointer-events:none" onclick="undoLastAction()" title="Nothing to undo yet">Undo</button>
     <button id="sync-pill" class="nav-btn off" onclick="openSyncModal()" title="Sync settings">Sync off</button>
   </div>
   <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
@@ -710,7 +721,7 @@
         <div style="display:flex;gap:8px">
           <button class="btn btn-ghost btn-sm" id="trip-btn" onclick="openTripModal()">Field Trip</button>
           <button class="btn btn-ghost btn-sm" onclick="showScreen('override')">Override</button>
-          <button class="btn btn-danger btn-sm" onclick="openResetModal()">↩ Reset Day</button>
+          <button class="btn btn-danger btn-sm" onclick="openResetModal()">Reset Day</button>
         </div>
       </div>
 
@@ -778,7 +789,7 @@
       <div class="flex-end mt-16" style="gap:8px">
         <button class="btn btn-ghost btn-lg" onclick="showAvailPanel()">Who is available</button>
         <button class="btn btn-gold btn-lg" onclick="runCoverage()">
-          ▶ Assign Coverage
+          Assign Coverage
         </button>
       </div>
     </div>
@@ -798,9 +809,9 @@
         <div class="flex-between" style="margin-bottom:16px">
           <div class="card-title" style="margin:0">Coverage Assignment</div>
           <div style="display:flex;gap:8px">
-            <button class="btn btn-ghost btn-sm" onclick="copyFullAssignment()">📋 Copy Assignment</button>
-            <button class="btn btn-ghost btn-sm" onclick="openSubPrint()">🖨 Sub Schedule</button>
-            <button class="btn btn-primary btn-sm" onclick="window.print()">🖨 Print All</button>
+            <button class="btn btn-ghost btn-sm" onclick="copyFullAssignment()">Copy Assignment</button>
+            <button class="btn btn-ghost btn-sm" onclick="openSubPrint()">Sub Schedule</button>
+            <button class="btn btn-primary btn-sm" onclick="window.print()">Print All</button>
           </div>
         </div>
         <div class="output-doc" id="output-doc"></div>
@@ -855,8 +866,7 @@
             <tr>
               <th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortRoster('name')">Name <span id="ros-sort-name"></span></th>
               <th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortRoster('tier')">Tier <span id="ros-sort-tier"></span></th>
-              <th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortRoster('avail')">Hi-Avail <span id="ros-sort-avail"></span></th>
-              <th>Excluded</th>
+              <th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortRoster('avail')" title="Sort by Hi-Avail">Flags <span id="ros-sort-avail"></span></th>
               <th>Mon</th>
               <th>Tue</th>
               <th>Wed</th>
@@ -871,7 +881,6 @@
         </table>
       </div>
       <div id="roster-empty" class="empty" style="display:none">
-        <div class="empty-icon">👤</div>
         <div class="empty-text">No teachers added yet. Click "Add Teacher" to get started.</div>
       </div>
     </div>
@@ -941,7 +950,6 @@
           </table>
         </div>
         <div id="log-empty" class="empty" style="display:none">
-          <div class="empty-icon">📋</div>
           <div class="empty-text">No coverage assignments logged yet.</div>
         </div>
       </div>
@@ -964,8 +972,8 @@
         </div>
         <div style="display:flex;align-items:flex-end;gap:8px">
           <button class="btn btn-primary" onclick="loadOverrideEntries()">Load Assignments</button>
-          <button class="btn btn-ghost btn-sm" onclick="resetAllOverride(document.getElementById('override-date').value)" title="Clear every assignment on this date, keep the absence rows">↺ Reset All</button>
-          <button class="btn btn-danger btn-sm" onclick="removeAllOverride(document.getElementById('override-date').value)" title="Remove every assignment on this date entirely, including the absence rows">✕ Remove All</button>
+          <button class="btn btn-ghost btn-sm" onclick="resetAllOverride(document.getElementById('override-date').value)" title="Clear every assignment on this date, keep the absence rows">Reset All</button>
+          <button class="btn btn-danger btn-sm" onclick="removeAllOverride(document.getElementById('override-date').value)" title="Remove every assignment on this date entirely, including the absence rows">Remove All</button>
         </div>
       </div>
       <div id="override-entries" style="margin-top:16px"></div>
@@ -1138,6 +1146,7 @@
     </div>
 
     <div class="flex-end mt-20">
+      <button class="btn btn-danger" id="teacher-delete-btn" style="margin-right:auto;display:none" onclick="deleteEditingTeacher()">Delete Teacher</button>
       <button class="btn btn-ghost" onclick="closeTeacherModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveTeacher()">Save Teacher</button>
     </div>
@@ -1747,7 +1756,7 @@ async function loadScheduleFromSP() {
       });
     });
     const count = Object.keys(scheduleData).length;
-    if (count > 0) document.getElementById('schedule-status').textContent = `✓ ${count} teachers loaded`;
+    if (count > 0) document.getElementById('schedule-status').textContent = `${count} teachers loaded`;
   } finally { hideLoading(); }
 }
 
@@ -2455,7 +2464,7 @@ const BLOB_SYNC = {
       setData('cs_schedule_updated', updated);
       const count = Object.keys(scheduleData).length;
       const el = document.getElementById('schedule-status');
-      if (el && count > 0) el.textContent = `✓ ${count} teachers loaded`;
+      if (el && count > 0) el.textContent = `${count} teachers loaded`;
     },
   },
   roomchart: {
@@ -2466,7 +2475,7 @@ const BLOB_SYNC = {
       setData('cs_roomchart_updated', updated);
       const count = Object.keys(roomChartData).length;
       const el = document.getElementById('roomchart-status');
-      if (el && count > 0) el.textContent = `✓ ${count} classes in room chart`;
+      if (el && count > 0) el.textContent = `${count} classes in room chart`;
     },
   },
 };
@@ -2878,8 +2887,8 @@ function addAbsenceRow() {
     </td>
     <td>
       <div style="display:flex;gap:4px">
-        <button class="btn btn-ghost btn-sm" onclick="duplicateAbsenceRow(this)" title="Duplicate row">⧉</button>
-        <button class="btn btn-danger btn-sm" onclick="removeAbsenceRow(this)">✕</button>
+        <button class="btn btn-ghost btn-sm" onclick="duplicateAbsenceRow(this)" title="Duplicate row">Duplicate</button>
+        <button class="btn btn-danger btn-sm" onclick="removeAbsenceRow(this)" aria-label="Remove row" title="Remove row">✕</button>
       </div>
     </td>
   `;
@@ -3990,6 +3999,7 @@ function openTeacherModal(id) {
   });
 
   document.getElementById('teacher-modal-title').textContent = id ? 'Edit Teacher' : 'Add Teacher';
+  document.getElementById('teacher-delete-btn').style.display = id ? '' : 'none';
   document.getElementById('t-name').value = '';
   document.getElementById('t-tier').value = '1';
   document.getElementById('t-high-avail').value = '';
@@ -4076,16 +4086,25 @@ async function saveTeacher() {
   populateAbtTeacherDropdown();
 }
 
+// Delete lives in the Edit window, not on every roster row, so it's never
+// one stray click away.
+async function deleteEditingTeacher() {
+  const id = editingTeacherId;
+  if (!id) return;
+  if (await deleteTeacher(id)) closeTeacherModal();
+}
+
 async function deleteTeacher(id) {
-  if (!confirm('Delete this teacher?')) return;
   const roster = getRoster();
   const teacher = roster.find(r => r.id === id);
+  if (!confirm(`Delete ${teacher?.name || 'this teacher'} from the roster?`)) return false;
   pushUndoSnapshot(`Delete teacher — ${teacher?.name || id}`);
   if (teacher?._spId) await deleteTeacherSP(teacher._spId);
   setRoster(roster.filter(r => r.id !== id));
   renderRoster();
   refreshAbsenceDropdowns();
   populateAbtTeacherDropdown();
+  return true;
 }
 
 // Pure: rebuilds each teacher's totalCoverages/lastCoverageDate/previousCoverageDate
@@ -4134,17 +4153,9 @@ function sortRoster(col) {
   renderRoster();
 }
 
-// Changing a tier from the roster row or the sync report, without the modal
-function setTierInline(id, tier) {
-  const roster = getRoster();
-  const t = roster.find(x => x.id === id);
-  if (!t) return;
-  t.tier = tier;
-  setRoster(roster);
-  if (STORAGE_MODE === 'sharepoint') saveTeacherSP(t);
-  renderRoster();
-}
-
+// Changing a tier from the Sync with Schedule report, without the modal.
+// Roster rows show tier as plain text; it changes only through Edit, so a
+// stray click or scroll over the table can't change someone's tier.
 function setTierByName(name, tier) {
   const roster = getRoster();
   const t = roster.find(x => x.name === name);
@@ -4198,22 +4209,24 @@ function renderRoster() {
   });
 
   tbody.innerHTML = sorted.map(t => {
+    // One small box per period, filled when free, so the week reads at a
+    // glance instead of as strings like "1,4,7"
     const avail = DAYS.map(day => {
-      const periods = [...(t.avail[day] || [])].sort((a,b)=>a-b);
-      return `<td style="font-size:11px;color:var(--gray-600)">${periods.join(',') || '—'}</td>`;
+      const free = new Set(t.avail[day] || []);
+      const boxes = PERIODS.map(p => `<span class="pbox${free.has(p) ? ' on' : ''}">${p}</span>`).join('');
+      const label = free.size ? 'Free periods ' + [...free].sort((a, b) => a - b).join(', ') : 'No free periods';
+      return `<td class="avail-cell"><span class="pboxes" role="img" aria-label="${day}: ${label}" title="${label}">${boxes}</span></td>`;
     }).join('');
     return `<tr>
       <td style="font-weight:600">${esc(t.name)}</td>
-      <td>${tierSelectHtml(t.tier, `setTierInline('${t.id}', this.value)`)}</td>
-      <td>${t.highAvail ? '<span class="tag tag-green">Y</span>' : ''}</td>
-      <td>${t.excluded ? '<span class="tag tag-red">Y</span>' : ''}</td>
+      <td><div class="tier-chip tier-${t.tier.toLowerCase()}">${t.tier}</div></td>
+      <td>${t.highAvail ? '<span class="tag tag-green">Hi-Avail</span> ' : ''}${t.excluded ? '<span class="tag tag-red">Excluded</span>' : ''}</td>
       ${avail}
       <td style="font-size:11px">${t.lastCoverageDate || '—'}</td>
       <td style="font-weight:600">${t.totalCoverages || 0}</td>
       <td>
         <div style="display:flex;gap:4px">
           <button class="btn btn-ghost btn-sm" onclick="openTeacherModal('${t.id}')">Edit</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteTeacher('${t.id}')">✕</button>
         </div>
       </td>
     </tr>`;
@@ -4709,9 +4722,9 @@ function renderOverrideTable() {
           <td>
             <div style="display:flex;gap:4px">
               <button class="btn btn-primary btn-sm" onclick="applyOverride(${e._origIdx}, '${dateStr}')">Apply</button>
-              <button class="btn btn-ghost btn-sm" onclick="resetOverride(${e._origIdx}, '${dateStr}')" title="Clear assignment, keep absence row">↺ Reset</button>
-              <button class="btn btn-danger btn-sm" onclick="removeOverride(${e._origIdx}, '${dateStr}')" title="Remove this assignment entirely">✕ Remove</button>
-              ${isOutsideSub(e.coveringTeacher) ? `<button class="btn btn-sm ${e.manualOverride ? 'btn-gold' : 'btn-ghost'}" onclick="toggleOutsideSubLock(${e._origIdx}, '${dateStr}')" title="${e.manualOverride ? 'Locked — click to unlock' : 'Soft — click to lock'}">${e.manualOverride ? '🔒' : '🔓'}</button>` : ''}
+              <button class="btn btn-ghost btn-sm" onclick="resetOverride(${e._origIdx}, '${dateStr}')" title="Clear assignment, keep absence row">Reset</button>
+              <button class="btn btn-danger btn-sm" onclick="removeOverride(${e._origIdx}, '${dateStr}')" title="Remove this assignment entirely">Remove</button>
+              ${isOutsideSub(e.coveringTeacher) ? `<button class="btn btn-sm ${e.manualOverride ? 'btn-gold' : 'btn-ghost'}" onclick="toggleOutsideSubLock(${e._origIdx}, '${dateStr}')" title="${e.manualOverride ? 'Locked — click to unlock' : 'Soft — click to lock'}">${e.manualOverride ? 'Locked' : 'Lock'}</button>` : ''}
             </div>
           </td>
         </tr>`).join('')}
@@ -4905,7 +4918,7 @@ function loadScheduleFromStorage() {
       scheduleData = JSON.parse(stored);
       const count = Object.keys(scheduleData).length;
       if (count > 0) {
-        document.getElementById('schedule-status').textContent = `✓ ${count} teachers loaded`;
+        document.getElementById('schedule-status').textContent = `${count} teachers loaded`;
       }
     }
   } catch(e) {}
@@ -4985,7 +4998,7 @@ function loadScheduleCSV(event) {
       }
 
       const teacherCount = Object.keys(scheduleData).length;
-      document.getElementById('schedule-status').textContent = `✓ ${teacherCount} teachers loaded`;
+      document.getElementById('schedule-status').textContent = `${teacherCount} teachers loaded`;
       let statusMsg = `Schedule loaded: ${teacherCount} teachers, ${parsed} class sections.`;
       if (unparsedRows.length > 0) statusMsg += ` ${unparsedRows.length} row(s) had a meeting time that couldn't be read and were skipped.`;
       showImportAlert(unparsedRows.length > 0 ? 'error' : 'success', statusMsg);
@@ -5414,8 +5427,8 @@ function addAbsenceRowWithData(teacher, period, course, section, room, noCoverag
     </td>
     <td>
       <div style="display:flex;gap:4px">
-        <button class="btn btn-ghost btn-sm" onclick="duplicateAbsenceRow(this)" title="Duplicate row">⧉</button>
-        <button class="btn btn-danger btn-sm" onclick="removeAbsenceRow(this)">✕</button>
+        <button class="btn btn-ghost btn-sm" onclick="duplicateAbsenceRow(this)" title="Duplicate row">Duplicate</button>
+        <button class="btn btn-danger btn-sm" onclick="removeAbsenceRow(this)" aria-label="Remove row" title="Remove row">✕</button>
       </div>
     </td>
   `;
@@ -6261,7 +6274,7 @@ function loadRoomChartFromStorage() {
       roomChartData = JSON.parse(stored);
       const count = Object.keys(roomChartData).length;
       if (count > 0) {
-        document.getElementById('roomchart-status').textContent = `✓ ${count} classes in room chart`;
+        document.getElementById('roomchart-status').textContent = `${count} classes in room chart`;
       }
     }
   } catch(e) {}
@@ -6309,7 +6322,7 @@ function loadRoomChartCSV(event) {
 
       localStorage.setItem('cs_roomchart', JSON.stringify(roomChartData));
       touchBlob('roomchart');
-      document.getElementById('roomchart-status').textContent = `✓ ${classCount} classes in room chart`;
+      document.getElementById('roomchart-status').textContent = `${classCount} classes in room chart`;
       showImportAlert('success', `Room chart loaded: ${classCount} class sections mapped.`);
 
       // Re-apply to existing schedule data if loaded
