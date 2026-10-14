@@ -420,4 +420,18 @@ test.describe('Misc regression fixes', () => {
     expect(await page.locator('#absences-tbody .abs-type').first().inputValue()).toBe('tardy');
     await expect(page.getByRole('button', { name: 'Duplicate row' }).first()).toBeVisible();
   });
+  test('the Roster table fits a 1280px-wide window with long names, no side-to-side scroll', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await gotoApp(page);
+    const r = await page.evaluate(() => {
+      const names = ['Alexandra Montgomery-Whitfield', 'Christopher Vanderberg', 'Maximilian Oyelaran-Santos'];
+      setRoster(names.map((n, i) => ({ id: 't' + i, name: n, tier: '1', highAvail: i === 0, excluded: i === 1,
+        avail: { Monday: [1, 3], Tuesday: [2], Wednesday: [4], Thursday: [], Friday: [7] },
+        lastCoverageDate: '2026-10-01', previousCoverageDate: '', totalCoverages: i })));
+      showScreen('roster');
+      const wrap = document.querySelector('#screen-roster .table-wrap');
+      return { scrollWidth: wrap.scrollWidth, clientWidth: wrap.clientWidth };
+    });
+    expect(r.scrollWidth).toBeLessThanOrEqual(r.clientWidth);
+  });
 });
