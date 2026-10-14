@@ -319,4 +319,29 @@ test.describe('Misc regression fixes', () => {
     await expect(page.locator('#save-failure-banner')).toBeVisible();
     expect(alerts).toHaveLength(1);
   });
+  test('Roster rows show tier as text and free periods as boxes; delete moved into the Edit window', async ({ page }) => {
+    await gotoApp(page);
+    page.on('dialog', d => d.accept());
+    await page.evaluate(() => {
+      setRoster([{ id: 't1', name: 'Jane Smith', tier: '2', highAvail: true, excluded: false,
+        avail: { Monday: [1, 4], Tuesday: [], Wednesday: [], Thursday: [], Friday: [] },
+        lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0 }]);
+      showScreen('roster');
+    });
+    const row = page.locator('#roster-tbody tr').first();
+    await expect(row.locator('select')).toHaveCount(0);
+    await expect(row.locator('.tier-chip')).toHaveText('2');
+    await expect(row.getByRole('img', { name: 'Monday: Free periods 1, 4' })).toBeVisible();
+    await expect(row.locator('.pbox.on')).toHaveCount(2);
+    await expect(row).toContainText('Hi-Avail');
+    await expect(row.getByRole('button')).toHaveText(['Edit']);
+
+    await row.getByRole('button', { name: 'Edit' }).click();
+    await page.getByRole('button', { name: 'Delete Teacher' }).click();
+    await expect(page.locator('#teacher-modal')).not.toHaveClass(/open/);
+    expect(await page.evaluate(() => getRoster().length)).toBe(0);
+
+    await page.evaluate(() => openTeacherModal());
+    await expect(page.getByRole('button', { name: 'Delete Teacher' })).toBeHidden();
+  });
 });
