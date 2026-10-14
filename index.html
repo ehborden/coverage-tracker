@@ -3735,7 +3735,7 @@ function renderOutput(assignments, unassigned, conflicts, dateStr, lockedCount, 
     var ta = document.createElement('textarea');
     ta.className = 'out-note' + (opts.fallback ? ' out-note-fallback' : '');
     ta.rows = 1;
-    ta.value = value;
+    ta.value = tidyNote(value);
     ta.placeholder = label + '...';
     ta.setAttribute('aria-label', label);
     ta.dataset.noteKey = key;
@@ -3780,8 +3780,8 @@ function renderOutput(assignments, unassigned, conflicts, dateStr, lockedCount, 
 
     var table = document.createElement('table');
     table.className = 'out-table';
-    table.innerHTML = '<colgroup><col style="width:44px"><col><col style="width:90px"><col style="width:240px"><col style="width:120px"></colgroup>'
-      + '<thead><tr><th>P</th><th>Class</th><th>Room</th><th>' + lastColTitle + '</th><th><span class="sr-only">Notes</span></th></tr></thead>';
+    table.innerHTML = '<colgroup><col style="width:72px"><col><col style="width:90px"><col style="width:240px"><col style="width:120px"></colgroup>'
+      + '<thead><tr><th>Period</th><th>Class</th><th>Room</th><th>' + lastColTitle + '</th><th><span class="sr-only">Notes</span></th></tr></thead>';
     var tbody = document.createElement('tbody');
     rows.sort(function(a, b) { return a.period - b.period; }).forEach(function(a) {
       var tr = document.createElement('tr');
@@ -3855,6 +3855,13 @@ function renderOutput(assignments, unassigned, conflicts, dateStr, lockedCount, 
 // is now just what End Date (for range) does automatically — see
 // rowsForRangeDay above — so there's no longer a separate flow for it.
 
+// Blank lines inside a note (common when lesson plans are pasted in) are
+// shown as plain line breaks, so several instructions for one class read as
+// one block. Display only: the saved note text isn't rewritten.
+function tidyNote(text) {
+  return String(text || '').replace(/\r/g, '').replace(/\n[ \t]*(\n[ \t]*)+/g, '\n').trim();
+}
+
 // Grows a results note box to fit its text. Chrome/Edge do this in CSS
 // (field-sizing: content); elsewhere it's measured, which only works once
 // the results are visible, so runCoverage calls it again after showing them.
@@ -3905,7 +3912,7 @@ function copyFullAssignment() {
   const notes = JSON.parse(localStorage.getItem('cs_notes_' + _outputData.dateStr) || '{}');
   const keyName = n => String(n).replace(/[^a-z0-9]/gi, '_');
   const line = a => `${a.courseName || ''}${a.sectionNumber ? ', ' + a.sectionNumber : ''}${a.roomNumber ? ', Room ' + a.roomNumber.replace(/^Room\s*/i, '').trim() : ''}`;
-  const addNote = n => { if (n && n.trim()) { htmlLines.push('<i style="color:#666;font-size:11px">' + esc(n.trim()) + '</i><br>'); textLines.push('  ' + n.trim()); } };
+  const addNote = n => { n = tidyNote(n); if (n) { htmlLines.push('<i style="color:#666;font-size:11px">' + esc(n).replace(/\n/g, '<br>') + '</i><br>'); textLines.push('  ' + n.replace(/\n/g, '\n  ')); } };
 
   // Email template
   const emailEl = doc.querySelector('#email-template-text');
@@ -3920,8 +3927,8 @@ function copyFullAssignment() {
   Object.entries(_outputData.staffByTeacher).forEach(([teacher, periods]) => {
     htmlLines.push('<b>For: ' + esc(teacher) + '</b>');
     textLines.push('For: ' + teacher);
-    const tNote = (notes['teacher_' + keyName(teacher)] || '').trim();
-    if (tNote) { htmlLines.push('<i>' + esc(tNote) + '</i>'); textLines.push(tNote); }
+    const tNote = tidyNote(notes['teacher_' + keyName(teacher)]);
+    if (tNote) { htmlLines.push('<i>' + esc(tNote).replace(/\n/g, '<br>') + '</i>'); textLines.push(tNote); }
     htmlLines.push('<br>');
     textLines.push('');
     periods.slice().sort((a, b) => a.period - b.period).forEach(a => {
@@ -5740,8 +5747,8 @@ function openSubPrint() {
       const section = entry.sectionNumber || '';
       const periodKey = 'period_' + (entry.absentTeacher || '').replace(/[^a-z0-9]/gi, '_') + '_' + entry.period;
       const teacherKey = 'teacher_' + (entry.absentTeacher || '').replace(/[^a-z0-9]/gi, '_');
-      const periodNote = (savedNotes[periodKey] || '').trim();
-      const teacherNote = (savedNotes[teacherKey] || '').trim();
+      const periodNote = tidyNote(savedNotes[periodKey]);
+      const teacherNote = tidyNote(savedNotes[teacherKey]);
       const combinedNotes = [teacherNote, periodNote].filter(Boolean).join('\n\n');
       const escStr = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       cardsHtml += `

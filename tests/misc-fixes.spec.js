@@ -394,4 +394,13 @@ test.describe('Misc regression fixes', () => {
     expect(copied).toContain(`Period 1: Algebra, MTH 9-1, Room 101 - ${covering[0]}`);
     expect(copied).toContain(`Period 2: Geometry, MTH 9-2, Room 102 - ${covering[1]}\n  Plans on desk`);
   });
+  test('blank lines inside a note show as plain line breaks; the saved note is not rewritten', async ({ page }) => {
+    await gotoApp(page);
+    const r = await page.evaluate(() => ({
+      tidy: tidyNote('Read p. 52.\n\n  \nRead p. 53.\r\n\r\nDone.'),
+      empty: tidyNote(undefined),
+    }));
+    expect(r.tidy).toBe('Read p. 52.\nRead p. 53.\nDone.');
+    expect(r.empty).toBe('');
+  });
 });
