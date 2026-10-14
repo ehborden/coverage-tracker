@@ -131,4 +131,20 @@ test.describe('Outside sub period exclusions and MS avoidance', () => {
     await page.fill('#run-date', '2026-06-01');
     expect(await page.evaluate(() => document.querySelector('#outside-sub-avail-area input[data-label="Outside Sub 1"][data-period="7"]').checked)).toBe(true);
   });
+  test('an outside sub takes the high school class over a middle school one in the same period, with real "SUBJ GRADE-SECTION" codes', async ({ page }) => {
+    await gotoApp(page);
+    const picks = await page.evaluate(() => {
+      setRoster([]); setLog([]);
+      const ab = (t, sec) => ({ absentTeacher: t, period: 1, courseName: 'English', sectionNumber: sec, roomNumber: '', absType: 'normal' });
+      const run = (list) => { setLog([]); return Object.fromEntries(assignCoverage(list, '2026-10-14', 1).newEntries.map(e => [e.sectionNumber, e.coveringTeacher])); };
+      return [
+        run([ab('A', 'ENG 7-1'), ab('B', 'ENG 10-1')]),
+        run([ab('B', 'ENG 10-1'), ab('A', 'ENG 7-1')]),
+        run([ab('A', 'SCI 6/7-2'), ab('B', 'SCI 11-3')]),
+      ];
+    });
+    expect(picks[0]['ENG 10-1']).toBe('Outside Sub');
+    expect(picks[1]['ENG 10-1']).toBe('Outside Sub');
+    expect(picks[2]['SCI 11-3']).toBe('Outside Sub');
+  });
 });

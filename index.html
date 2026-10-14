@@ -3310,10 +3310,16 @@ function assignCoverage(absences, dateStr, outsideSubCount) {
       subUsage[i].add(ab.period);
     });
 
-    // MS detection: section ID starts with 6, 7, 8, or contains 6/7
+    // MS detection: the Schedule's Subject column says "MS: ..." for this
+    // class, or its section code ("ENG 7-1", "SCI 6/7-2") is grade 6-8.
+    // The old check only matched sections that START with the grade
+    // ("7-1"), so with real "SUBJ GRADE-SECTION" codes it never fired and
+    // outside subs landed on middle school classes as often as not.
     const isMS = (ab) => {
-      const sec = (ab.sectionNumber || '').trim();
-      return /^[678][-\/]/i.test(sec) || /^[678]\b/.test(sec) || /6\/7/i.test(sec);
+      const sched = scheduledClassFor(ab.absentTeacher, dayName, ab.period);
+      if (sched && typeof sched === 'object' && sched.level) return sched.level === 'MS';
+      const grades = classGrades({ section: ab.sectionNumber, courseName: ab.courseName });
+      return grades.length > 0 && grades.every(g => Number(g) >= 6 && Number(g) <= 8);
     };
     // Sort: non-MS (HS) periods first, so outside subs only land on a 6-8
     // class when there's nothing else left for them that period; hardest
