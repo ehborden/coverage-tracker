@@ -389,6 +389,11 @@
     font-size: 14px;
   }
   /* Coverage results: one compact table per absent teacher / outside sub */
+  /* Add by Teacher rows: checkbox at its natural size, normal-case text
+     (the page-wide input/label styles were stretching the checkbox across
+     the row and capitalizing every class name) */
+  #abt-periods label { text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--gray-800); font-weight: 400; }
+  #abt-periods input[type="checkbox"] { width: auto; flex: none; margin: 0; }
   .out-teacher { display: flex; justify-content: space-between; align-items: baseline; margin: 20px 0 6px; font-family: 'DM Sans', sans-serif; }
   .out-teacher h3 { margin: 0; font-size: 15px; color: var(--navy); }
   .out-table { width: 100%; border-collapse: collapse; font-family: 'DM Sans', sans-serif; margin-bottom: 6px; table-layout: fixed; }
