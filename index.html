@@ -2909,7 +2909,7 @@ function addAbsenceRow() {
     </td>
     <td>
       <div style="display:flex;gap:4px">
-        <button class="btn btn-ghost btn-sm" onclick="duplicateAbsenceRow(this)" title="Duplicate row">Duplicate</button>
+        <button class="btn btn-ghost btn-sm" onclick="duplicateAbsenceRow(this)" title="Duplicate row" aria-label="Duplicate row" style="display:inline-flex;align-items:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>
         <button class="btn btn-danger btn-sm" onclick="removeAbsenceRow(this)" aria-label="Remove row" title="Remove row">✕</button>
       </div>
     </td>
@@ -5453,15 +5453,16 @@ function addAbsenceRowWithData(teacher, period, course, section, room, noCoverag
     <td><input class="abs-section" type="text" value="${esc(section)}" placeholder="01" style="width:80px" /></td>
     <td><input class="abs-room" type="text" value="${esc(room)}" placeholder="204" style="width:60px" /></td>
     <td>
-      <select class="abs-type" style="width:100%;font-size:12px;padding:4px 6px">
+      <select class="abs-type" aria-label="Absence type" style="width:100%;font-size:12px;padding:4px 6px">
         <option value="normal" ${(!absType || absType === "normal") ? "selected" : ""}>Staff</option>
+        <option value="tardy" ${absType === "tardy" ? "selected" : ""}>Tardy</option>
         <option value="outside" ${absType === "outside" ? "selected" : ""}>Outside Sub</option>
         <option value="skip" ${absType === "skip" ? "selected" : ""}>Skip</option>
       </select>
     </td>
     <td>
       <div style="display:flex;gap:4px">
-        <button class="btn btn-ghost btn-sm" onclick="duplicateAbsenceRow(this)" title="Duplicate row">Duplicate</button>
+        <button class="btn btn-ghost btn-sm" onclick="duplicateAbsenceRow(this)" title="Duplicate row" aria-label="Duplicate row" style="display:inline-flex;align-items:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>
         <button class="btn btn-danger btn-sm" onclick="removeAbsenceRow(this)" aria-label="Remove row" title="Remove row">✕</button>
       </div>
     </td>

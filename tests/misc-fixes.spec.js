@@ -403,4 +403,21 @@ test.describe('Misc regression fixes', () => {
     expect(r.tidy).toBe('Read p. 52.\nRead p. 53.\nDone.');
     expect(r.empty).toBe('');
   });
+  test('a Tardy row stays Tardy after switching dates and back (it used to turn into Staff)', async ({ page }) => {
+    await gotoApp(page);
+    await page.evaluate(() => {
+      document.getElementById('run-date').value = '2026-06-01';
+      onDateChange();
+      const row = document.querySelector('#absences-tbody tr');
+      row.querySelector('.abs-teacher').value = '__custom__';
+      row.querySelector('.abs-teacher-custom').value = 'Late Teacher';
+      row.querySelector('.abs-period').value = '1';
+      row.querySelector('.abs-course').value = 'Math';
+      row.querySelector('.abs-type').value = 'tardy';
+      document.getElementById('run-date').value = '2026-06-02'; onDateChange();
+      document.getElementById('run-date').value = '2026-06-01'; onDateChange();
+    });
+    expect(await page.locator('#absences-tbody .abs-type').first().inputValue()).toBe('tardy');
+    await expect(page.getByRole('button', { name: 'Duplicate row' }).first()).toBeVisible();
+  });
 });
