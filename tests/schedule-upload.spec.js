@@ -157,4 +157,21 @@ test.describe('Schedule uploads: co-teachers, hand-added classes, change check',
     await page.locator('#co-select-all').check();
     await expect(page.locator('#co-remove-selected')).toHaveText('Remove selected (1)');
   });
+  test('a grade 6-8 Advisory with no MS/US in Subject still counts as middle school (but not toward the advisor\'s own level)', async ({ page }) => {
+    await upload(page, 'Teacher,Class ID,Description,Meeting Times,Status,Room,Subject\n'
+      + 'HS Advisor,ADV 7-2,Advisory,M-1,Active,1,Advisory\n'
+      + 'HS Advisor,ENG 10-1,English 10,T-2,Active,2,US: English\n'
+      + 'Other Advisor,ADV-B,Advisory 8,W-3,Active,3,Advisory\n'
+      + 'Upper Advisor,ADV 11-1,Advisory,R-4,Active,4,Advisory\n');
+    const r = await page.evaluate(() => ({
+      adv7: scheduledClassFor('HS Advisor', 'Monday', 1).level,
+      adv8: scheduledClassFor('Other Advisor', 'Wednesday', 3).level,
+      adv11: scheduledClassFor('Upper Advisor', 'Thursday', 4).level,
+      advisorLevel: teacherLevel('HS Advisor'),
+    }));
+    expect(r.adv7).toBe('MS');
+    expect(r.adv8).toBe('MS');
+    expect(r.adv11).toBe('US');
+    expect(r.advisorLevel).toBe('US');
+  });
 });
