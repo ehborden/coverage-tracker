@@ -753,6 +753,7 @@
         <div class="card-title">Run Coverage</div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-ghost btn-sm" id="trip-btn" onclick="openTripModal()">Field Trip</button>
+          <button class="btn btn-ghost btn-sm" onclick="openCoTeacherModal()">Co-Teacher</button>
           <button class="btn btn-ghost btn-sm" onclick="showScreen('override')">Override</button>
           <button class="btn btn-danger btn-sm" onclick="openResetModal()">Reset Day</button>
         </div>
@@ -1018,24 +1019,6 @@
   ══════════════════════════════════════════ -->
   <div id="screen-schedule" class="screen">
     <div class="card" style="margin-bottom:16px">
-      <div class="card-title" style="margin-bottom:4px">Add Co-Teacher</div>
-      <p style="font-size:12px;color:var(--gray-600);margin-bottom:12px">Adds a second teacher to every meeting of a class. Kept when a new schedule is uploaded. If they're out, the class still gets a sub, flagged to check with the main teacher first.</p>
-      <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">
-        <div>
-          <label style="font-size:11px" for="si-co-section">Class ID</label>
-          <input type="text" id="si-co-section" list="si-co-sections" placeholder="e.g. ENG 9-1" style="width:100%" />
-          <datalist id="si-co-sections"></datalist>
-        </div>
-        <div>
-          <label style="font-size:11px" for="si-co-teacher">Co-teacher</label>
-          <select id="si-co-teacher" style="width:100%"><option value="">Select...</option></select>
-        </div>
-        <div>
-          <button class="btn btn-primary btn-sm" onclick="scheduleAddCoTeacher()" style="white-space:nowrap">Add Co-Teacher</button>
-        </div>
-      </div>
-    </div>
-    <div class="card" style="margin-bottom:16px">
       <div class="card-title" style="margin-bottom:4px">Add Class</div>
       <p style="font-size:12px;color:var(--gray-600);margin-bottom:12px">One meeting at a time. Classes added here are kept when a new schedule is uploaded.</p>
       <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 80px 1fr auto;gap:8px;align-items:end">
@@ -1241,6 +1224,31 @@
     <div class="flex-end mt-20">
       <button class="btn btn-ghost" onclick="closeResetModal()">Cancel</button>
       <button class="btn btn-danger" onclick="confirmReset()">Reset This Day</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="coteacher-modal">
+  <div class="modal" style="max-width:560px" role="dialog" aria-modal="true" aria-labelledby="coteacher-modal-title">
+    <div class="modal-title" id="coteacher-modal-title">Co-Teachers</div>
+    <p style="font-size:12px;color:var(--gray-600);margin-bottom:12px">Adds a second teacher to every meeting of a class. Kept when a new schedule is uploaded. If they're out, the class still gets a sub, flagged to check with the main teacher first.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">
+      <div>
+        <label style="font-size:11px" for="si-co-section">Class ID</label>
+        <input type="text" id="si-co-section" list="si-co-sections" placeholder="e.g. ENG 9-1" style="width:100%" />
+        <datalist id="si-co-sections"></datalist>
+      </div>
+      <div>
+        <label style="font-size:11px" for="si-co-teacher">Co-teacher</label>
+        <select id="si-co-teacher" style="width:100%"><option value="">Select...</option></select>
+      </div>
+      <div>
+        <button class="btn btn-primary btn-sm" onclick="scheduleAddCoTeacher()" style="white-space:nowrap">Add</button>
+      </div>
+    </div>
+    <div id="coteacher-list" style="margin-top:16px;max-height:260px;overflow-y:auto"></div>
+    <div class="flex-end mt-20">
+      <button class="btn btn-primary" onclick="closeCoTeacherModal()">Done</button>
     </div>
   </div>
 </div>
@@ -6974,18 +6982,6 @@ function renderScheduleInspector() {
     const unique = [...new Set(names)].sort();
     teacherSel.innerHTML = '<option value="">Select...</option>' + unique.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
     if (current) teacherSel.value = current;
-    const coSel = document.getElementById('si-co-teacher');
-    if (coSel) {
-      const cur = coSel.value;
-      coSel.innerHTML = teacherSel.innerHTML;
-      if (cur) coSel.value = cur;
-    }
-    const dl = document.getElementById('si-co-sections');
-    if (dl) {
-      const secs = new Set();
-      Object.values(scheduleData).forEach(cl => cl.forEach(c => { if (!c.coTeacherOf && c.section) secs.add(c.section); }));
-      dl.innerHTML = [...secs].sort().map(x => `<option value="${esc(x)}"></option>`).join('');
-    }
   }
 
   Object.entries(scheduleData).forEach(([teacher, classes]) => {
@@ -7066,6 +7062,53 @@ function scheduleAddClass() {
   refreshAbsenceDropdowns();
 }
 
+// Co-Teacher popup (button next to Field Trip on Run Coverage)
+function openCoTeacherModal() {
+  const names = [...new Set(Object.keys(scheduleData).concat(getRoster().map(t => t.name)))].sort();
+  const sel = document.getElementById('si-co-teacher');
+  sel.innerHTML = '<option value="">Select...</option>' + names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  const secs = new Set();
+  Object.values(scheduleData).forEach(cl => cl.forEach(c => { if (!c.coTeacherOf && c.section) secs.add(c.section); }));
+  document.getElementById('si-co-sections').innerHTML = [...secs].sort().map(x => `<option value="${esc(x)}"></option>`).join('');
+  renderCoTeacherList();
+  document.getElementById('coteacher-modal').classList.add('open');
+}
+function closeCoTeacherModal() { document.getElementById('coteacher-modal').classList.remove('open'); }
+
+// Current co-teachers, one line per teacher + class. Ones from the
+// schedule file can't be removed here (the next upload would bring them
+// back); hand-added ones can.
+function renderCoTeacherList() {
+  const el = document.getElementById('coteacher-list');
+  if (!el) return;
+  const seen = new Map();
+  Object.entries(scheduleData).forEach(([t, cl]) => cl.forEach(c => {
+    if (!c.coTeacherOf) return;
+    const k = t + '||' + c.section;
+    if (!seen.has(k)) seen.set(k, { teacher: t, section: c.section, main: c.coTeacherOf, manual: !!c.manual });
+  }));
+  const rows = [...seen.values()].sort((a, b) => a.section.localeCompare(b.section) || a.teacher.localeCompare(b.teacher));
+  el.innerHTML = rows.length
+    ? '<table style="font-size:12px;width:100%"><thead><tr><th>Class</th><th>Co-teacher</th><th>Main teacher</th><th><span class="sr-only">Remove</span></th></tr></thead><tbody>'
+      + rows.map(r => `<tr><td>${esc(r.section)}</td><td>${esc(r.teacher)}</td><td>${esc(r.main)}</td><td>${r.manual
+        ? `<button class="btn btn-ghost btn-sm" data-t="${esc(r.teacher)}" data-s="${esc(r.section)}" onclick="removeCoTeacher(this.dataset.t, this.dataset.s)">Remove</button>`
+        : '<span style="color:var(--gray-600)">from schedule file</span>'}</td></tr>`).join('')
+      + '</tbody></table>'
+    : '<p style="font-size:12px;color:var(--gray-600)">No co-teachers yet.</p>';
+}
+
+function removeCoTeacher(teacher, section) {
+  if (!confirm(`Remove ${teacher} as co-teacher on ${section}?`)) return;
+  if (scheduleData[teacher]) {
+    scheduleData[teacher] = scheduleData[teacher].filter(c => !(c.manual && c.coTeacherOf && c.section === section));
+    if (!scheduleData[teacher].length) delete scheduleData[teacher];
+  }
+  saveScheduleToStorage();
+  renderCoTeacherList();
+  if (document.getElementById('screen-schedule')?.classList.contains('active')) renderScheduleInspector();
+  refreshAbsenceDropdowns();
+}
+
 // Adds a co-teacher to every meeting of a class, marked manual so it's
 // carried over onto future uploads (carryOverManualEntries).
 function scheduleAddCoTeacher() {
@@ -7085,7 +7128,8 @@ function scheduleAddCoTeacher() {
   });
   saveScheduleToStorage();
   document.getElementById('si-co-section').value = '';
-  renderScheduleInspector();
+  renderCoTeacherList();
+  if (document.getElementById('screen-schedule')?.classList.contains('active')) renderScheduleInspector();
   refreshAbsenceDropdowns();
   showImportAlert('success', added
     ? `${coTeacher} added to ${meetings[0].section} (${added} meeting${added !== 1 ? 's' : ''}), co-teaching with ${owner}.`

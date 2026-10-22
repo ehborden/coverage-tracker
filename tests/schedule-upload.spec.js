@@ -36,12 +36,14 @@ test.describe('Schedule uploads: co-teachers, hand-added classes, change check',
       + 'Jane Smith,ENG 9-1,English 9,M-1,Active,201,\n'
       + 'Bob Jones,MTH 10-1,Algebra,T-3,Active,305,\n'
       + 'Carl Moss,ART 8-1,Art,F-2,Active,12,\n');
-    await page.evaluate(() => {
-      showScreen('schedule');
-      document.getElementById('si-co-section').value = 'ENG 9-1';
-      document.getElementById('si-co-teacher').value = 'Bob Jones';
-      scheduleAddCoTeacher();
-    });
+    await page.evaluate(() => showScreen('run'));
+    await page.getByRole('button', { name: 'Co-Teacher' }).click();
+    await page.fill('#si-co-section', 'ENG 9-1');
+    await page.selectOption('#si-co-teacher', 'Bob Jones');
+    await page.locator('#coteacher-modal').getByRole('button', { name: 'Add', exact: true }).click();
+    await expect(page.locator('#coteacher-list')).toContainText('ENG 9-1');
+    await expect(page.locator('#coteacher-list').getByRole('button', { name: 'Remove' })).toBeVisible();
+    await page.locator('#coteacher-modal').getByRole('button', { name: 'Done' }).click();
     expect(await page.evaluate(() => scheduleData['Bob Jones'].some(c => c.section === 'ENG 9-1' && c.manual && c.coTeacherOf === 'Jane Smith'))).toBe(true);
 
     // New file: ENG 9-1 moves to period 2, a room changes, Art is gone, a new teacher appears
