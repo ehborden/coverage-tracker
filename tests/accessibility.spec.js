@@ -25,6 +25,7 @@ const MODALS = [
   { open: 'openTripModal', close: 'closeTripModal', id: 'trip-modal' },
   { open: 'openSettingsModal', close: 'closeSettingsModal', id: 'settings-modal' },
   { open: 'openRestoreChoice', close: 'closeRestoreChoice', id: 'restore-choice-modal' },
+  { open: 'openCoTeacherModal', close: 'closeCoTeacherModal', id: 'coteacher-modal' },
 ];
 
 async function scanAndAssert(page, label, root = 'document') {
