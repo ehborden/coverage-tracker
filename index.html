@@ -1234,8 +1234,8 @@
     <p style="font-size:12px;color:var(--gray-600);margin-bottom:12px">Adds a second teacher to every meeting of a class. Kept when a new schedule is uploaded. If they're out, the class still gets a sub, flagged to check with the main teacher first.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">
       <div>
-        <label style="font-size:11px" for="si-co-section">Class ID</label>
-        <input type="text" id="si-co-section" list="si-co-sections" placeholder="e.g. ENG 9-1" style="width:100%" />
+        <label style="font-size:11px" for="si-co-section">Class</label>
+        <input type="text" id="si-co-section" list="si-co-sections" placeholder="Type a class name, ID, or teacher" autocomplete="off" style="width:100%" />
         <datalist id="si-co-sections"></datalist>
       </div>
       <div>
@@ -7104,13 +7104,22 @@ function scheduleAddClass() {
 }
 
 // Co-Teacher popup (button next to Field Trip on Run Coverage)
+let _coClassChoices = new Map(); // dropdown label -> Class ID
 function openCoTeacherModal() {
   const names = [...new Set(Object.keys(scheduleData).concat(getRoster().map(t => t.name)))].sort();
   const sel = document.getElementById('si-co-teacher');
   sel.innerHTML = '<option value="">Select...</option>' + names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
-  const secs = new Set();
-  Object.values(scheduleData).forEach(cl => cl.forEach(c => { if (!c.coTeacherOf && c.section) secs.add(c.section); }));
-  document.getElementById('si-co-sections').innerHTML = [...secs].sort().map(x => `<option value="${esc(x)}"></option>`).join('');
+  // One choice per class, "English 9 · ENG 9-1 · Rivera, Ana", sorted by
+  // class name, so typing any part of the name, ID or teacher narrows it
+  _coClassChoices = new Map();
+  Object.entries(scheduleData).forEach(([t, cl]) => cl.forEach(c => {
+    if (c.coTeacherOf || !c.section) return;
+    const label = `${c.courseName || c.section} · ${c.section} · ${t}`;
+    if (!_coClassChoices.has(label)) _coClassChoices.set(label, c.section);
+  }));
+  document.getElementById('si-co-sections').innerHTML = [..._coClassChoices.keys()]
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    .map(x => `<option value="${esc(x)}"></option>`).join('');
   renderCoTeacherList();
   document.getElementById('coteacher-modal').classList.add('open');
 }
@@ -7153,7 +7162,9 @@ function removeCoTeacher(teacher, section) {
 // Adds a co-teacher to every meeting of a class, marked manual so it's
 // carried over onto future uploads (carryOverManualEntries).
 function scheduleAddCoTeacher() {
-  const section = document.getElementById('si-co-section').value.trim();
+  const typed = document.getElementById('si-co-section').value.trim();
+  // A picked choice maps back to its Class ID; a typed Class ID works too
+  const section = _coClassChoices.get(typed) || typed;
   const coTeacher = document.getElementById('si-co-teacher').value;
   if (!section || !coTeacher) { alert('Pick a class and a co-teacher.'); return; }
   const key = section.toUpperCase();
