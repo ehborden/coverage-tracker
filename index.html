@@ -2836,6 +2836,7 @@ function onDateChange() {
   document.getElementById('outside-sub-count').value = saved !== null ? saved : 0;
   renderOutsideSubAvail();
   renderTripPanel();
+  showSavedOutputForDate(newDate);
 }
 
 function renderAbsencesTable() {
@@ -2847,6 +2848,7 @@ function renderAbsencesTable() {
   document.getElementById('outside-sub-count').value = saved !== null ? saved : 0;
   renderOutsideSubAvail();
   renderTripPanel();
+  showSavedOutputForDate(dateStr);
 }
 
 // Shows one row per outside sub actually configured for this date, each
@@ -4592,6 +4594,29 @@ function removeCoverageEntry(dateStr, absentTeacher, period) {
 // The Run Coverage output document doesn't know about edits made on the
 // Override screen (or an absence row deleted after the fact) unless told.
 // Call this after any change that might affect a date currently on screen.
+// Shows a date's saved assignments on Run Coverage without re-running
+// anything: called when the date changes, when the app opens, and after a
+// sync brings in changes, so a date that already has coverage always shows
+// it. Assign Coverage still re-runs (keeping existing picks). Skipped while
+// someone is typing in a results note, so a redraw never eats their text.
+function showSavedOutputForDate(dateStr) {
+  const area = document.getElementById('output-area');
+  if (!area || !dateStr) return;
+  const doc = document.getElementById('output-doc');
+  if (doc && doc.contains(document.activeElement) && area.dataset.outputDate === dateStr) return;
+  const assignments = getLog().filter(e => e.date === dateStr);
+  if (!assignments.length) {
+    area.style.display = 'none';
+    delete area.dataset.outputDate;
+    return;
+  }
+  const outsideSubCount = getData('cs_outsidesubcount_' + dateStr, 0);
+  renderOutput(assignments, assignments.filter(e => isUnassigned(e.coveringTeacher)), [], dateStr, 0, outsideSubCount);
+  area.dataset.outputDate = dateStr;
+  area.style.display = 'block';
+  document.querySelectorAll('#output-doc .out-note').forEach(resizeOutNote);
+}
+
 function refreshOutputIfShowingDate(dateStr) {
   const area = document.getElementById('output-area');
   if (!area || area.style.display === 'none' || area.dataset.outputDate !== dateStr) return;

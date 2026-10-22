@@ -434,4 +434,27 @@ test.describe('Misc regression fixes', () => {
     });
     expect(r.scrollWidth).toBeLessThanOrEqual(r.clientWidth);
   });
+  test('switching dates shows that date\'s saved assignments without clicking Assign Coverage, and hides them on a date with none', async ({ page }) => {
+    await gotoApp(page);
+    await page.evaluate(() => {
+      setLog([
+        { date: '2026-06-01', absentTeacher: 'Bob Jones', period: 1, courseName: 'Math', sectionNumber: 'MTH 9-1', roomNumber: '101', coveringTeacher: 'Jane Smith' },
+        { date: '2026-06-02', absentTeacher: 'Amy Lee', period: 3, courseName: 'Art', sectionNumber: 'ART 10-1', roomNumber: '5', coveringTeacher: 'Carl Moss' },
+      ]);
+      document.getElementById('run-date').value = '2026-06-01'; onDateChange();
+    });
+    await expect(page.locator('#output-area')).toBeVisible();
+    await expect(page.locator('#output-doc')).toContainText('Jane Smith');
+
+    await page.evaluate(() => { document.getElementById('run-date').value = '2026-06-02'; onDateChange(); });
+    await expect(page.locator('#output-doc')).toContainText('Carl Moss');
+    await expect(page.locator('#output-doc')).not.toContainText('Jane Smith');
+
+    await page.evaluate(() => { document.getElementById('run-date').value = '2026-06-03'; onDateChange(); });
+    await expect(page.locator('#output-area')).toBeHidden();
+
+    // Opening the app on a date that already has coverage shows it too
+    await page.evaluate(() => { document.getElementById('run-date').value = '2026-06-01'; renderAbsencesTable(); });
+    await expect(page.locator('#output-doc')).toContainText('Jane Smith');
+  });
 });
