@@ -116,4 +116,24 @@ test.describe('Schedule uploads: co-teachers, hand-added classes, change check',
     expect(r.teachers).toEqual(['Kartzman, Lauren', 'Lee, Amy', 'Rosado-Gonzalez, Jonathan']);
     expect(dialogs.join('\n')).toContain('Nobodyhere (STEAM 8-2)');
   });
+  test('removing a co-teacher takes two clicks on ✕, and one from the file stays off future uploads', async ({ page }) => {
+    const csv = 'Teacher,Class ID,Description,Meeting Times,Status,Room,Teachers\n'
+      + '"Kartzman, Lauren",STEAM 8-1,STEAM 8-1,W-3,Active,14,Rosado-Gonzalez/Kartzman\n'
+      + '"Rosado-Gonzalez, Jonathan",STEAM 6,STEAM 6,M-1,Active,14,"Rosado-Gonzalez, Jonathan"\n';
+    await upload(page, csv);
+    await page.evaluate(() => showScreen('run'));
+    await page.getByRole('button', { name: 'Co-Teacher' }).click();
+    const x = page.locator('#coteacher-list .co-remove');
+    await expect(x).toHaveText('✕');
+    await x.click();
+    await expect(x).toHaveText('Remove?');
+    expect(await page.evaluate(() => scheduleData['Rosado-Gonzalez, Jonathan'].some(c => c.coTeacherOf))).toBe(true);
+    await x.click();
+    await expect(page.locator('#coteacher-list')).toContainText('No co-teachers yet.');
+    expect(await page.evaluate(() => scheduleData['Rosado-Gonzalez, Jonathan'].some(c => c.coTeacherOf))).toBe(false);
+
+    await upload(page, csv);
+    await page.locator('#schedule-diff-modal').getByRole('button', { name: 'Apply' }).click();
+    expect(await page.evaluate(() => scheduleData['Rosado-Gonzalez, Jonathan'].some(c => c.coTeacherOf))).toBe(false);
+  });
 });
