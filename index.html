@@ -408,6 +408,11 @@
   .out-table td.out-unassigned { color: var(--red); }
   .out-table .out-why { display: block; font-weight: 400; font-size: 11px; color: var(--gray-600); }
   .out-table .out-why.out-co { color: var(--amber); font-weight: 600; }
+  .out-swap-box { background: var(--amber-light); color: var(--gray-800); border-left: 3px solid var(--amber); border-radius: 4px; padding: 10px 14px; margin: 0 0 16px; font: 13px/1.5 'DM Sans', sans-serif; }
+  .out-swap-item + .out-swap-item { margin-top: 10px; padding-top: 10px; border-top: 1px solid #fde68a; }
+  .out-swap-actions { display: flex; gap: 8px; margin-top: 8px; }
+  .out-table tr.out-swap-hl td { background: var(--amber-light); }
+  @media print { .out-swap-box { display: none; } }
   @media print { .out-table .out-why.out-co { display: none; } }
   .out-table td.out-n { text-align: right; }
   .out-table tr.out-note-row td { padding: 0 10px 12px; }
@@ -2378,7 +2383,7 @@ function checkDailyChanged() {
 // concept here — a date's bundle is never "deleted," it just becomes
 // empty, which merges like any other change via plain "newer updated wins."
 
-const DAILY_DATE_PREFIXES = ['cs_absences_', 'cs_notes_', 'cs_outsidesubcount_', 'cs_outsidesub_unavail_', 'cs_trip_'];
+const DAILY_DATE_PREFIXES = ['cs_absences_', 'cs_notes_', 'cs_outsidesubcount_', 'cs_outsidesub_unavail_', 'cs_trip_', 'cs_swapskip_'];
 
 function allDailyDates() {
   const dates = new Set();
@@ -2400,6 +2405,7 @@ function dailyItemData(date) {
     outsideSubCount: getData('cs_outsidesubcount_' + date, 0),
     outsideSubUnavail: getOutsideSubUnavail(date),
     trip: getTripDay(date),
+    swapSkip: getData('cs_swapskip_' + date, []),
   };
 }
 
@@ -2415,6 +2421,11 @@ function applyDailyItem(item) {
   // An item pushed by a copy of the app from before Grade Out existed has
   // no trip field at all. That isn't "no trip today", so leave ours alone.
   if (item.trip !== undefined) setTripDay(item.date, item.trip || {});
+  // Same idea: an item from before swap suggestions existed has no field
+  if (Array.isArray(item.swapSkip)) {
+    if (item.swapSkip.length) setData('cs_swapskip_' + item.date, item.swapSkip);
+    else localStorage.removeItem('cs_swapskip_' + item.date);
+  }
 }
 
 let _dailyItemBaseline = {}; // date -> sig of dailyItemData(date), for change detection only
@@ -3764,6 +3775,30 @@ function renderOutput(assignments, unassigned, conflicts, dateStr, lockedCount, 
     outputDoc.appendChild(a);
   }
 
+  // Swap suggestions (see findSwapSuggestions); the two rows get highlighted
+  var swapSuggestions = findSwapSuggestions(dateStr, assignments);
+  var swapRowKeys = new Set();
+  if (swapSuggestions.length) {
+    var box = document.createElement('div');
+    box.className = 'out-swap-box';
+    box.setAttribute('role', 'status');
+    box.innerHTML = swapSuggestions.map(function(sg) {
+      swapRowKeys.add(sg.e1.absentTeacher + '||' + sg.e1.period);
+      swapRowKeys.add(sg.e2.absentTeacher + '||' + sg.e2.period);
+      var cls = function(e) { return esc(e.sectionNumber || e.courseName || ''); };
+      var fit1 = sg.fit1, fit2 = sg.fit2;
+      var key = swapPairKey(sg.e1, sg.e2);
+      return '<div class="out-swap-item"><strong>Suggested swap, Period ' + sg.e1.period + ':</strong> '
+        + esc(sg.t1) + ' is covering ' + cls(sg.e1) + ' and ' + esc(sg.t2) + ' is covering ' + cls(sg.e2) + '. '
+        + 'Swapped, ' + esc(sg.t1) + (fit1 ? ' (' + esc(fit1) + ')' : '') + ' would take ' + cls(sg.e2) + ' and '
+        + esc(sg.t2) + (fit2 ? ' (' + esc(fit2) + ')' : '') + ' would take ' + cls(sg.e1) + '. '
+        + 'Only swap if the email hasn\'t gone out. If it already went out, it\'s a judgment call: swap and let both teachers know, or keep it as is.'
+        + '<div class="out-swap-actions"><button type="button" class="btn btn-primary btn-sm" data-key="' + esc(key) + '" onclick="applySwapSuggestion(\'' + dateStr + '\', this.dataset.key)">Swap them</button>'
+        + '<button type="button" class="btn btn-ghost btn-sm" data-key="' + esc(key) + '" onclick="keepSwapAsIs(\'' + dateStr + '\', this.dataset.key)">Keep as is</button></div></div>';
+    }).join('');
+    outputDoc.appendChild(box);
+  }
+
   // Split assignments: staff vs outside sub
   var staffAssignments = assignments.filter(a => !isOutsideSub(a.coveringTeacher));
   var outsideSubAssignments = assignments.filter(a => isOutsideSub(a.coveringTeacher));
@@ -3844,6 +3879,7 @@ function renderOutput(assignments, unassigned, conflicts, dateStr, lockedCount, 
     var tbody = document.createElement('tbody');
     rows.sort(function(a, b) { return a.period - b.period; }).forEach(function(a) {
       var tr = document.createElement('tr');
+      if (swapRowKeys.has(a.absentTeacher + '||' + a.period)) tr.className = 'out-swap-hl';
       tr.innerHTML = '<td class="out-p">' + a.period + '</td><td>' + classCell(a) + '</td><td>' + roomOf(a) + '</td>' + cellFor(a) + '<td class="out-n"></td>';
       tbody.appendChild(tr);
       var n = rowNote(a);
@@ -4657,7 +4693,8 @@ function showSavedOutputForDate(dateStr) {
   const area = document.getElementById('output-area');
   if (!area || !dateStr) return;
   const doc = document.getElementById('output-doc');
-  if (doc && doc.contains(document.activeElement) && area.dataset.outputDate === dateStr) return;
+  const active = document.activeElement;
+  if (doc && active && active.tagName === 'TEXTAREA' && doc.contains(active) && area.dataset.outputDate === dateStr) return;
   const assignments = getLog().filter(e => e.date === dateStr);
   if (!assignments.length) {
     area.style.display = 'none';
@@ -4669,6 +4706,70 @@ function showSavedOutputForDate(dateStr) {
   area.dataset.outputDate = dateStr;
   area.style.display = 'block';
   document.querySelectorAll('#output-doc .out-note').forEach(resizeOutNote);
+}
+
+// ── Swap suggestions ──
+// A re-run only swaps classes between its own new picks, never moving
+// someone assigned earlier (they may already have been emailed). When
+// an earlier pick and a newer one in the same period would be a better
+// match the other way round (MS teacher on the MS class, same-subject
+// teacher on a high school class, same rule as the automatic swap), the
+// results show a suggestion with Swap / Keep as is instead.
+
+function swapPairKey(e1, e2) {
+  return [`${e1.absentTeacher}|${e1.period}`, `${e2.absentTeacher}|${e2.period}`].sort().join('~');
+}
+
+function findSwapSuggestions(dateStr, entries) {
+  const dayName = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
+  const skip = new Set(getData('cs_swapskip_' + dateStr, []));
+  const levelCache = new Map(), subjCache = new Map();
+  const levelOf = n => { if (!levelCache.has(n)) levelCache.set(n, teacherLevel(n)); return levelCache.get(n); };
+  const subjOf = n => { if (!subjCache.has(n)) subjCache.set(n, teacherSubjects(n)); return subjCache.get(n); };
+  const classOf = e => { const s = scheduledClassFor(e.absentTeacher, dayName, e.period); return s && typeof s === 'object' ? s : null; };
+  const matches = (e, teacher) => {
+    const c = classOf(e);
+    if (!c) return false;
+    if (c.level === 'MS') return levelOf(teacher) === 'MS';
+    if (c.level === 'US' && c.subject) return subjOf(teacher).has(c.subject);
+    return false;
+  };
+  const staff = entries.filter(e => e.coveringTeacher && !isSpecialLabel(e.coveringTeacher));
+  const byPeriod = {};
+  staff.forEach(e => (byPeriod[e.period] = byPeriod[e.period] || []).push(e));
+  const out = [];
+  Object.values(byPeriod).forEach(group => {
+    for (let i = 0; i < group.length; i++) for (let j = i + 1; j < group.length; j++) {
+      const e1 = group[i], e2 = group[j];
+      const t1 = e1.coveringTeacher.replace(' (Emergency)', '').trim(), t2 = e2.coveringTeacher.replace(' (Emergency)', '').trim();
+      const before = (matches(e1, t1) ? 1 : 0) + (matches(e2, t2) ? 1 : 0);
+      const after = (matches(e1, t2) ? 1 : 0) + (matches(e2, t1) ? 1 : 0);
+      // Why it's better, only for a side that actually matches after the swap
+      const fit = (e, t) => { if (!matches(e, t)) return ''; const c = classOf(e); return c.level === 'MS' ? 'middle school' : 'teaches ' + c.subject; };
+      if (after > before && !skip.has(swapPairKey(e1, e2))) out.push({ e1, e2, t1, t2, fit1: fit(e2, t1), fit2: fit(e1, t2) });
+    }
+  });
+  return out;
+}
+
+function applySwapSuggestion(dateStr, pairKey) {
+  const log = getLog();
+  const [k1, k2] = pairKey.split('~');
+  const find = k => { const [absent, period] = [k.slice(0, k.lastIndexOf('|')), Number(k.slice(k.lastIndexOf('|') + 1))]; return log.find(e => e.date === dateStr && e.absentTeacher === absent && e.period === period); };
+  const e1 = find(k1), e2 = find(k2);
+  if (!e1 || !e2) return;
+  pushUndoSnapshot(`Swap classes — ${e1.coveringTeacher} / ${e2.coveringTeacher} (P${e1.period})`);
+  [e1.coveringTeacher, e2.coveringTeacher] = [e2.coveringTeacher, e1.coveringTeacher];
+  [e1.assignReason, e2.assignReason] = [e2.assignReason, e1.assignReason];
+  setLog(log);
+  showSavedOutputForDate(dateStr);
+}
+
+function keepSwapAsIs(dateStr, pairKey) {
+  const list = getData('cs_swapskip_' + dateStr, []);
+  if (!list.includes(pairKey)) list.push(pairKey);
+  setData('cs_swapskip_' + dateStr, list);
+  showSavedOutputForDate(dateStr);
 }
 
 function refreshOutputIfShowingDate(dateStr) {
@@ -5924,7 +6025,7 @@ function startNewYear() {
 
   const label = schoolYearLabelFromLog(log);
   const roster = getRoster();
-  const dated = ['cs_absences_', 'cs_notes_', 'cs_outsidesubcount_', 'cs_outsidesub_unavail_', 'cs_trip_'];
+  const dated = ['cs_absences_', 'cs_notes_', 'cs_outsidesubcount_', 'cs_outsidesub_unavail_', 'cs_trip_', 'cs_swapskip_'];
   let datedCount = 0;
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
@@ -6270,6 +6371,9 @@ async function applyBackupPayload(payload) {
       Object.entries(payload.trips || {}).forEach(([date, trip]) => {
         setTripDay(date, trip || {});
       });
+      Object.entries(payload.swapSkips || {}).forEach(([date, list]) => {
+        if (Array.isArray(list)) setData('cs_swapskip_' + date, list);
+      });
       touchBlob('schedule');
       touchBlob('roomchart');
       markDirty('daily');
@@ -6361,6 +6465,15 @@ function buildBackupPayload() {
     }
   }
 
+  // Collect per-date swap suggestions marked "Keep as is"
+  const swapSkips = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('cs_swapskip_')) {
+      try { swapSkips[key.replace('cs_swapskip_', '')] = JSON.parse(localStorage.getItem(key)); } catch {}
+    }
+  }
+
   // Collect per-date Grade Out / Field Trip settings
   const trips = {};
   for (let i = 0; i < localStorage.length; i++) {
@@ -6387,6 +6500,7 @@ function buildBackupPayload() {
     outsideSubCounts,
     outsideSubUnavail,
     trips,
+    swapSkips,
   };
 }
 
