@@ -95,4 +95,23 @@ test.describe('Schedule uploads: co-teachers, hand-added classes, change check',
     await expect(page.locator('#output-doc')).toContainText('Free Teacher');
     await expect(page.locator('#output-doc')).toContainText('Co-taught with Jane Smith. Check with them first');
   });
+  test('the Veracross "Teachers" column (last names, slash-separated) is read as co-teachers', async ({ page }) => {
+    const dialogs = [];
+    page.on('dialog', d => dialogs.push(d.message()));
+    await upload(page, 'Teacher,Class ID,Description,Meeting Times,Status,Room,Teachers\n'
+      + '"Ortega-Reyes, Daniel",STEAM 6,STEAM 6,M-1,Active,14,Ortega-Reyes/Feldmann\n'
+      + '"Feldmann, Petra",STEAM 7-1,STEAM 7-1,T-2,Active,14,"Feldmann, Petra"\n'
+      + '"Feldmann, Petra",STEAM 8-1,STEAM 8-1,W-3,Active,14,Ortega-Reyes/Feldmann\n'
+      + '"Feldmann, Petra",STEAM 8-2,STEAM 8-2,R-4,Active,14,Feldmann/Nobodyhere\n'
+      + '"Lee, Amy",HIS 10-1,History,F-5,Active,20,Lee/Feldmann/Ortega-Reyes\n');
+    const r = await page.evaluate(() => ({
+      feldmann: scheduleData['Feldmann, Petra'].filter(c => c.coTeacherOf).map(c => [c.section, c.coTeacherOf]),
+      ortega: scheduleData['Ortega-Reyes, Daniel'].filter(c => c.coTeacherOf).map(c => [c.section, c.coTeacherOf]),
+      teachers: Object.keys(scheduleData).sort(),
+    }));
+    expect(r.feldmann).toEqual([['STEAM 6', 'Ortega-Reyes, Daniel'], ['HIS 10-1', 'Lee, Amy']]);
+    expect(r.ortega).toEqual([['STEAM 8-1', 'Feldmann, Petra'], ['HIS 10-1', 'Lee, Amy']]);
+    expect(r.teachers).toEqual(['Feldmann, Petra', 'Lee, Amy', 'Ortega-Reyes, Daniel']);
+    expect(dialogs.join('\n')).toContain('Nobodyhere (STEAM 8-2)');
+  });
 });
