@@ -1,0 +1,96 @@
+const { test, expect } = require('@playwright/test');
+const { gotoApp } = require('./helpers');
+
+const HEADER = 'Teacher,Class ID,Description,Meeting Times,Status,Room,Co-Teacher\n';
+
+async function upload(page, csv) {
+  await page.evaluate((text) => {
+    const file = new File([text], 'schedule.csv', { type: 'text/csv' });
+    loadScheduleCSV({ target: { files: [file], value: '' } });
+  }, csv);
+  await page.waitForTimeout(200);
+}
+
+test.describe('Schedule uploads: co-teachers, hand-added classes, change check', () => {
+  test.beforeEach(async ({ page }) => {
+    page.on('dialog', d => d.accept());
+    await gotoApp(page);
+  });
+
+  test('a Co-Teacher column gives the co-teacher every meeting, marked as co-taught', async ({ page }) => {
+    await upload(page, HEADER
+      + 'Jane Smith,ENG 9-1,English 9,"M-1, W-1",Active,201,Amy Lee; Bob Jones\n'
+      + 'Amy Lee,SCI 9-1,Biology,T-2,Active,110,\n');
+    const r = await page.evaluate(() => ({
+      amy: scheduleData['Amy Lee'].filter(c => c.section === 'ENG 9-1').map(c => [c.day, c.period, c.coTeacherOf]),
+      bob: scheduleData['Bob Jones'].map(c => c.coTeacherOf),
+      jane: scheduleData['Jane Smith'].map(c => c.coTeacherOf || null),
+    }));
+    expect(r.amy).toEqual([['Monday', 1, 'Jane Smith'], ['Wednesday', 1, 'Jane Smith']]);
+    expect(r.bob).toEqual(['Jane Smith', 'Jane Smith']);
+    expect(r.jane).toEqual([null, null]);
+  });
+
+  test('a re-upload shows what changed; Cancel changes nothing, Apply applies and keeps a hand-added co-teacher', async ({ page }) => {
+    await upload(page, HEADER
+      + 'Jane Smith,ENG 9-1,English 9,M-1,Active,201,\n'
+      + 'Bob Jones,MTH 10-1,Algebra,T-3,Active,305,\n'
+      + 'Carl Moss,ART 8-1,Art,F-2,Active,12,\n');
+    await page.evaluate(() => {
+      showScreen('schedule');
+      document.getElementById('si-co-section').value = 'ENG 9-1';
+      document.getElementById('si-co-teacher').value = 'Bob Jones';
+      scheduleAddCoTeacher();
+    });
+    expect(await page.evaluate(() => scheduleData['Bob Jones'].some(c => c.section === 'ENG 9-1' && c.manual && c.coTeacherOf === 'Jane Smith'))).toBe(true);
+
+    // New file: ENG 9-1 moves to period 2, a room changes, Art is gone, a new teacher appears
+    const second = HEADER
+      + 'Jane Smith,ENG 9-1,English 9,M-2,Active,201,\n'
+      + 'Bob Jones,MTH 10-1,Algebra,T-3,Active,306,\n'
+      + 'Dana Fox,SPN 9-1,Spanish,W-4,Active,210,\n';
+    await upload(page, second);
+    const modal = page.locator('#schedule-diff-modal');
+    await expect(modal).toHaveClass(/open/);
+    await expect(modal).toContainText('New teachers (1)');
+    await expect(modal).toContainText('Dana Fox');
+    await expect(modal).toContainText('Carl Moss');
+    await expect(modal).toContainText('Jane Smith: ENG 9-1 (Mon P1 → Mon P2)');
+    await expect(modal).toContainText('1 room change (not listed)');
+    await expect(modal).toContainText('Bob Jones on ENG 9-1 (co-teacher with Jane Smith)');
+
+    await modal.getByRole('button', { name: 'Cancel' }).click();
+    expect(await page.evaluate(() => Object.keys(scheduleData).sort())).toEqual(['Bob Jones', 'Carl Moss', 'Jane Smith']);
+
+    await upload(page, second);
+    await page.locator('#schedule-diff-modal').getByRole('button', { name: 'Apply' }).click();
+    const after = await page.evaluate(() => ({
+      teachers: Object.keys(scheduleData).sort(),
+      bobEng: scheduleData['Bob Jones'].filter(c => c.section === 'ENG 9-1').map(c => [c.day, c.period, c.manual, c.coTeacherOf]),
+    }));
+    expect(after.teachers).toEqual(['Bob Jones', 'Dana Fox', 'Jane Smith']);
+    // The hand-added co-teacher followed the class to its new period
+    expect(after.bobEng).toEqual([['Monday', 2, true, 'Jane Smith']]);
+  });
+
+  test('a co-teacher out while the main teacher is in: still assigned, flagged to check first', async ({ page }) => {
+    await upload(page, HEADER + 'Jane Smith,ENG 9-1,English 9,W-1,Active,201,Amy Lee\n');
+    await page.evaluate(() => {
+      setRoster([{ id: 't1', name: 'Free Teacher', tier: '1', highAvail: false, excluded: false,
+        avail: { Monday: [], Tuesday: [], Wednesday: [1], Thursday: [], Friday: [] },
+        lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0 }]);
+      setLog([]);
+      document.getElementById('run-date').value = '2026-10-14'; // a Wednesday
+      onDateChange();
+      openAddByTeacher();
+      document.getElementById('abt-teacher').value = 'Amy Lee';
+      loadTeacherPeriods();
+    });
+    await expect(page.locator('#abt-periods')).toContainText('Co-taught with Jane Smith: check with them before assigning');
+    expect(await page.locator('.abt-period-check').first().isChecked()).toBe(true);
+
+    await page.evaluate(() => { confirmAddByTeacher(); runCoverage(); });
+    await expect(page.locator('#output-doc')).toContainText('Free Teacher');
+    await expect(page.locator('#output-doc')).toContainText('Co-taught with Jane Smith. Check with them first');
+  });
+});

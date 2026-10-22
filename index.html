@@ -407,6 +407,8 @@
   .out-table td.out-cov { font-weight: 700; font-size: 14px; }
   .out-table td.out-unassigned { color: var(--red); }
   .out-table .out-why { display: block; font-weight: 400; font-size: 11px; color: var(--gray-600); }
+  .out-table .out-why.out-co { color: var(--amber); font-weight: 600; }
+  @media print { .out-table .out-why.out-co { display: none; } }
   .out-table td.out-n { text-align: right; }
   .out-table tr.out-note-row td { padding: 0 10px 12px; }
   .out-table tr.has-note td { border-bottom: none; }
@@ -1016,7 +1018,26 @@
   ══════════════════════════════════════════ -->
   <div id="screen-schedule" class="screen">
     <div class="card" style="margin-bottom:16px">
-      <div class="card-title" style="margin-bottom:12px">Add Class</div>
+      <div class="card-title" style="margin-bottom:4px">Add Co-Teacher</div>
+      <p style="font-size:12px;color:var(--gray-600);margin-bottom:12px">Adds a second teacher to every meeting of a class. Kept when a new schedule is uploaded. If they're out, the class still gets a sub, flagged to check with the main teacher first.</p>
+      <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">
+        <div>
+          <label style="font-size:11px" for="si-co-section">Class ID</label>
+          <input type="text" id="si-co-section" list="si-co-sections" placeholder="e.g. ENG 9-1" style="width:100%" />
+          <datalist id="si-co-sections"></datalist>
+        </div>
+        <div>
+          <label style="font-size:11px" for="si-co-teacher">Co-teacher</label>
+          <select id="si-co-teacher" style="width:100%"><option value="">Select...</option></select>
+        </div>
+        <div>
+          <button class="btn btn-primary btn-sm" onclick="scheduleAddCoTeacher()" style="white-space:nowrap">Add Co-Teacher</button>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title" style="margin-bottom:4px">Add Class</div>
+      <p style="font-size:12px;color:var(--gray-600);margin-bottom:12px">One meeting at a time. Classes added here are kept when a new schedule is uploaded.</p>
       <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 80px 1fr auto;gap:8px;align-items:end">
         <div>
           <label style="font-size:11px" for="si-add-teacher">Teacher</label>
@@ -1220,6 +1241,18 @@
     <div class="flex-end mt-20">
       <button class="btn btn-ghost" onclick="closeResetModal()">Cancel</button>
       <button class="btn btn-danger" onclick="confirmReset()">Reset This Day</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="schedule-diff-modal">
+  <div class="modal" style="max-width:620px" role="dialog" aria-modal="true" aria-labelledby="schedule-diff-title">
+    <div class="modal-title" id="schedule-diff-title">Check the new schedule</div>
+    <p style="color:var(--gray-600);font-size:13px;margin-bottom:12px">Compared with the schedule loaded now. Nothing changes until you click Apply.</p>
+    <div id="schedule-diff-body" style="max-height:420px;overflow-y:auto;font-size:13px"></div>
+    <div class="flex-end mt-20" style="gap:8px">
+      <button class="btn btn-ghost" onclick="cancelScheduleUpload()">Cancel</button>
+      <button class="btn btn-primary" onclick="commitScheduleUpload()">Apply</button>
     </div>
   </div>
 </div>
@@ -3038,7 +3071,7 @@ function scheduledClassFor(teacherName, dayName, period) {
   if (!classes) return null;
   const match = classes.find(c => c.day === dayName && c.period === period);
   if (!match) return 'free';
-  return { courseName: match.courseName || '', section: match.section || '', room: match.room || '', level: match.level || null, subject: match.subject || null };
+  return { courseName: match.courseName || '', section: match.section || '', room: match.room || '', level: match.level || null, subject: match.subject || null, coTeacherOf: match.coTeacherOf || null };
 }
 
 // Splits a Schedule CSV "Subject" cell like "MS: Mathematics" into
@@ -3824,6 +3857,18 @@ function renderOutput(assignments, unassigned, conflicts, dateStr, lockedCount, 
     outputDoc.appendChild(table);
   }
 
+  // A co-taught class whose main teacher is in today: still assigned, but
+  // flagged so whoever runs coverage checks with that teacher first.
+  var outDayName = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
+  var outAbsent = new Set(getAbsencesByDate(dateStr).filter(function(x) { return x.absType !== 'tardy'; }).map(function(x) { return x.teacher; }));
+  Object.keys(staffByTeacher).forEach(function(t) { outAbsent.add(t); });
+  function coTaughtNote(a) {
+    var sched = scheduledClassFor(a.absentTeacher, outDayName, a.period);
+    var main = sched && typeof sched === 'object' ? sched.coTeacherOf : null;
+    if (!main || outAbsent.has(main)) return '';
+    return '<span class="out-why out-co">Co-taught with ' + esc(main) + '. Check with them first; if you can\'t reach them, keep this assignment.</span>';
+  }
+
   // Staff-covered periods, grouped by absent teacher
   Object.entries(staffByTeacher).forEach(function(entry) {
     var teacher = entry[0];
@@ -3833,9 +3878,9 @@ function renderOutput(assignments, unassigned, conflicts, dateStr, lockedCount, 
         var reasonAttr = a.assignReason ? ' class="assign-reason" data-reason="' + esc(a.assignReason) + '"' : '';
         if (isUnassigned(a.coveringTeacher)) {
           return '<td class="out-cov out-unassigned"><span' + reasonAttr + '>' + esc(a.coveringTeacher) + '</span>'
-            + (a.assignReason ? '<span class="out-why">' + esc(a.assignReason) + '</span>' : '') + '</td>';
+            + (a.assignReason ? '<span class="out-why">' + esc(a.assignReason) + '</span>' : '') + coTaughtNote(a) + '</td>';
         }
-        return '<td class="out-cov"><span' + reasonAttr + '>' + esc(a.coveringTeacher) + '</span></td>';
+        return '<td class="out-cov"><span' + reasonAttr + '>' + esc(a.coveringTeacher) + '</span>' + coTaughtNote(a) + '</td>';
       },
       function(a) {
         var key = 'period_' + teacher.replace(/[^a-z0-9]/gi, '_') + '_' + a.period;
@@ -5028,9 +5073,16 @@ function loadScheduleCSV(event) {
         // "Jump Start", "Coverage", "Study Hall", "UNSCHD", ...) aren't real
         // subjects and are left blank on purpose — see parseSubjectField.
         subject: headers.findIndex(h => h.toLowerCase() === 'subject'),
+        // Optional. Extra teachers on a class ("Co-Teacher", "Additional
+        // Teachers", ...); several names separated by semicolons.
+        coTeachers: headers.findIndex(h => CO_TEACHER_HEADERS.includes(h.toLowerCase())),
       };
 
-      scheduleData = {};
+      // Parsed into a new object, not straight into scheduleData: on a
+      // re-upload the changes are shown first (applyScheduleUpload) and
+      // nothing is replaced until Apply.
+      const newData = {};
+      const coTeacherRows = []; // { main, names, section, slots... } applied after every main teacher is known
       let parsed = 0;
       // Rows whose meeting-times string didn't match the expected format
       // (e.g. "M-3", "T-5, W-5"). A row like this must NOT silently create
@@ -5061,44 +5113,198 @@ function loadScheduleCSV(event) {
           unparsedRows.push(`${teacher} (${section || courseName || 'unnamed class'}): "${meetingTimes}"`);
           continue;
         }
-        if (!scheduleData[teacher]) scheduleData[teacher] = [];
-        slots.forEach(({ day, period }) => {
+        if (!newData[teacher]) newData[teacher] = [];
+        const meetings = slots.map(({ day, period }) => {
           // Look up specific room from room chart first
           const chartRoom = getRoomFromChart(section, day, period);
           const room = chartRoom || fallbackRoom;
-          scheduleData[teacher].push({ day, period, courseName, section, room, level, subject });
+          return { day, period, courseName, section, room, level, subject };
         });
+        newData[teacher].push(...meetings);
+        if (idx.coTeachers >= 0 && (cols[idx.coTeachers] || '').trim()) {
+          coTeacherRows.push({ main: teacher, raw: cols[idx.coTeachers], meetings });
+        }
         parsed++;
       }
 
-      const teacherCount = Object.keys(scheduleData).length;
-      document.getElementById('schedule-status').textContent = `${teacherCount} teachers loaded`;
-      let statusMsg = `Schedule loaded: ${teacherCount} teachers, ${parsed} class sections.`;
-      if (unparsedRows.length > 0) statusMsg += ` ${unparsedRows.length} row(s) had a meeting time that couldn't be read and were skipped.`;
-      showImportAlert(unparsedRows.length > 0 ? 'error' : 'success', statusMsg);
-      if (unparsedRows.length > 0) {
-        alert(`These rows had a meeting time that couldn't be read, so they're missing from the schedule (and from anything, like the multi-day range, that depends on it):\n\n`
-          + unparsedRows.slice(0, 30).join('\n')
-          + (unparsedRows.length > 30 ? `\n...and ${unparsedRows.length - 30} more.` : ''));
-      }
-      // Save to localStorage and refresh dropdowns
-      saveScheduleToStorage();
-      refreshAbsenceDropdowns();
-      populateAbtTeacherDropdown();
-      // Coverage periods shift even when staff doesn't, so a fresh schedule
-      // upload needs availability re-derived from it right away — otherwise
-      // it's easy to forget the separate trip to Roster -> Sync with
-      // Schedule, and run coverage against stale availability without
-      // noticing. Same human-reviewed confirm dialog as clicking the
-      // button directly, just triggered automatically instead of relying
-      // on someone to remember it.
-      deriveAvailabilityFromSchedule();
+      // Co-teachers listed in the file get the same meetings, marked as
+      // co-taught so an absence on their side is flagged (see coTeacherOf).
+      const knownNames = new Set(Object.keys(newData).concat(getRoster().map(t => t.name)));
+      coTeacherRows.forEach(({ main, raw, meetings }) => {
+        splitCoTeacherNames(raw, knownNames).forEach(name => {
+          if (name === main) return;
+          if (!newData[name]) newData[name] = [];
+          meetings.forEach(m => {
+            if (!newData[name].some(x => x.section === m.section && x.day === m.day && x.period === m.period)) {
+              newData[name].push({ ...m, coTeacherOf: main });
+            }
+          });
+        });
+      });
+
+      applyScheduleUpload(newData, { parsed, unparsedRows });
     } catch(err) {
       showImportAlert('error', 'Could not parse schedule CSV: ' + err.message);
     }
     event.target.value = '';
   };
   reader.readAsText(file);
+}
+
+// ── Schedule re-uploads: co-teachers, hand-added classes, and a change check ──
+// Classes added by hand on the Schedule screen (Add Class, Add Co-Teacher)
+// are marked manual:true inside scheduleData itself, so they sync with the
+// schedule and are carried over onto every new upload. A co-teacher entry
+// also carries coTeacherOf: <main teacher>, from the file or by hand.
+
+const CO_TEACHER_HEADERS = ['co-teacher', 'co-teachers', 'co teacher', 'co teachers', 'coteacher', 'coteachers',
+  'co-teacher(s)', 'additional teacher', 'additional teachers', 'other teachers'];
+
+// "Smith, Jane; Lee, Amy" → two names. Semicolons, pipes and new lines
+// always separate; a comma separates only when every piece is a known
+// teacher (names in this school's export can contain commas themselves).
+function splitCoTeacherNames(raw, knownNames) {
+  const out = [];
+  String(raw || '').split(/[;|\n]/).map(x => x.trim()).filter(Boolean).forEach(piece => {
+    if (knownNames.has(piece) || !piece.includes(',')) { out.push(piece); return; }
+    const parts = piece.split(',').map(x => x.trim()).filter(Boolean);
+    if (parts.every(x => knownNames.has(x))) out.push(...parts); else out.push(piece);
+  });
+  return [...new Set(out)];
+}
+
+// Hand-added entries from the current schedule, re-applied onto a new
+// upload. A co-teacher follows the class (its meetings come from the new
+// file, so a time change carries over); a class missing from the new file
+// is reported as dropped. Plain hand-added classes are kept as entered.
+function carryOverManualEntries(oldData, newData) {
+  const data = JSON.parse(JSON.stringify(newData));
+  const kept = new Set(), dropped = new Set();
+  const has = (t, m) => (data[t] || []).some(x => x.section === m.section && x.day === m.day && x.period === m.period);
+  const coDone = new Set();
+  Object.entries(oldData || {}).forEach(([teacher, classes]) => {
+    classes.filter(c => c.manual).forEach(c => {
+      if (c.coTeacherOf) {
+        const key = teacher + '||' + c.section;
+        if (coDone.has(key)) return;
+        coDone.add(key);
+        const sectionKey = String(c.section).toUpperCase();
+        let owner = (data[c.coTeacherOf] || []).some(x => !x.coTeacherOf && String(x.section).toUpperCase() === sectionKey) ? c.coTeacherOf : null;
+        if (!owner) owner = Object.keys(data).find(t => t !== teacher && data[t].some(x => !x.coTeacherOf && String(x.section).toUpperCase() === sectionKey)) || null;
+        if (!owner) { dropped.add(`${teacher} on ${c.section}`); return; }
+        data[owner].filter(x => !x.coTeacherOf && String(x.section).toUpperCase() === sectionKey).forEach(m => {
+          if (!data[teacher]) data[teacher] = [];
+          if (!has(teacher, m)) data[teacher].push({ ...m, coTeacherOf: owner, manual: true });
+        });
+        kept.add(`${teacher} on ${c.section} (co-teacher with ${owner})`);
+      } else {
+        if (!data[teacher]) data[teacher] = [];
+        if (!has(teacher, c)) data[teacher].push({ ...c });
+        kept.add(`${teacher} on ${c.section}`);
+      }
+    });
+  });
+  return { data, kept: [...kept], dropped: [...dropped] };
+}
+
+// What a new upload changes, ignoring hand-added entries on the old side.
+// Room-only changes are counted, not listed.
+function diffSchedules(oldData, newData) {
+  const index = (d) => {
+    const m = new Map(); // teacher -> section -> { slots:Set, rooms:Map }
+    Object.entries(d || {}).forEach(([t, classes]) => {
+      classes.filter(c => !c.manual).forEach(c => {
+        if (!m.has(t)) m.set(t, new Map());
+        const secs = m.get(t);
+        if (!secs.has(c.section)) secs.set(c.section, { slots: new Set(), rooms: new Map() });
+        const key = c.day.slice(0, 3) + ' P' + c.period;
+        secs.get(c.section).slots.add(key);
+        secs.get(c.section).rooms.set(key, c.room || '');
+      });
+    });
+    return m;
+  };
+  const a = index(oldData), b = index(newData);
+  const out = { teachersAdded: [], teachersRemoved: [], classesAdded: [], classesRemoved: [], timesChanged: [], roomChanges: 0 };
+  b.forEach((_, t) => { if (!a.has(t)) out.teachersAdded.push(t); });
+  a.forEach((_, t) => { if (!b.has(t)) out.teachersRemoved.push(t); });
+  a.forEach((secsA, t) => {
+    const secsB = b.get(t);
+    if (!secsB) return;
+    secsB.forEach((_, sec) => { if (!secsA.has(sec)) out.classesAdded.push(`${t}: ${sec}`); });
+    secsA.forEach((va, sec) => {
+      const vb = secsB.get(sec);
+      if (!vb) { out.classesRemoved.push(`${t}: ${sec}`); return; }
+      const sa = [...va.slots].sort().join(', '), sb = [...vb.slots].sort().join(', ');
+      if (sa !== sb) { out.timesChanged.push(`${t}: ${sec} (${sa} → ${sb})`); return; }
+      va.rooms.forEach((room, key) => { if (vb.rooms.get(key) !== room) out.roomChanges++; });
+    });
+  });
+  Object.values(out).forEach(v => Array.isArray(v) && v.sort());
+  return out;
+}
+
+// Applies a parsed upload. A first upload goes straight in; a re-upload
+// shows what changed (and which hand-added classes are carried over)
+// with Apply / Cancel, and nothing changes until Apply.
+let _pendingScheduleUpload = null;
+function applyScheduleUpload(newData, info) {
+  const carried = carryOverManualEntries(scheduleData, newData);
+  _pendingScheduleUpload = { data: carried.data, info, kept: carried.kept, dropped: carried.dropped };
+  if (!Object.keys(scheduleData || {}).length) { commitScheduleUpload(); return; }
+  const d = diffSchedules(scheduleData, newData);
+  const list = (title, items) => items.length
+    ? `<div style="margin-bottom:10px"><strong>${esc(title)} (${items.length})</strong><ul style="margin:4px 0 0 18px;padding:0">`
+      + items.slice(0, 25).map(x => `<li>${esc(x)}</li>`).join('')
+      + (items.length > 25 ? `<li>...and ${items.length - 25} more</li>` : '') + '</ul></div>'
+    : '';
+  const changes = list('New teachers', d.teachersAdded) + list('Teachers no longer in the schedule', d.teachersRemoved)
+    + list('Classes added', d.classesAdded) + list('Classes removed', d.classesRemoved) + list('Classes that changed day or period', d.timesChanged);
+  document.getElementById('schedule-diff-body').innerHTML =
+    (changes || '<p>No class changes compared with the current schedule.</p>')
+    + (d.roomChanges ? `<p style="color:var(--gray-600)">${d.roomChanges} room change${d.roomChanges !== 1 ? 's' : ''} (not listed).</p>` : '')
+    + list('Added by hand, kept', carried.kept)
+    + (carried.dropped.length ? list('Added by hand, but the class is no longer in the file (dropped)', carried.dropped) : '');
+  document.getElementById('schedule-diff-modal').classList.add('open');
+}
+
+function cancelScheduleUpload() {
+  _pendingScheduleUpload = null;
+  document.getElementById('schedule-diff-modal').classList.remove('open');
+  showImportAlert('success', 'Schedule upload cancelled. Nothing was changed.');
+}
+
+function commitScheduleUpload() {
+  const pending = _pendingScheduleUpload;
+  if (!pending) return;
+  _pendingScheduleUpload = null;
+  document.getElementById('schedule-diff-modal').classList.remove('open');
+  scheduleData = pending.data;
+  const { parsed, unparsedRows } = pending.info;
+  const teacherCount = Object.keys(scheduleData).length;
+  document.getElementById('schedule-status').textContent = `${teacherCount} teachers loaded`;
+  let statusMsg = `Schedule loaded: ${teacherCount} teachers, ${parsed} class sections.`;
+  if (pending.kept.length) statusMsg += ` Kept ${pending.kept.length} class${pending.kept.length !== 1 ? 'es' : ''} added by hand.`;
+  if (unparsedRows.length > 0) statusMsg += ` ${unparsedRows.length} row(s) had a meeting time that couldn't be read and were skipped.`;
+  showImportAlert(unparsedRows.length > 0 ? 'error' : 'success', statusMsg);
+  if (unparsedRows.length > 0) {
+    alert(`These rows had a meeting time that couldn't be read, so they're missing from the schedule (and from anything, like the multi-day range, that depends on it):\n\n`
+      + unparsedRows.slice(0, 30).join('\n')
+      + (unparsedRows.length > 30 ? `\n...and ${unparsedRows.length - 30} more.` : ''));
+  }
+  // Save to localStorage and refresh dropdowns
+  saveScheduleToStorage();
+  refreshAbsenceDropdowns();
+  populateAbtTeacherDropdown();
+  if (document.getElementById('screen-schedule')?.classList.contains('active')) renderScheduleInspector();
+  // Coverage periods shift even when staff doesn't, so a fresh schedule
+  // upload needs availability re-derived from it right away — otherwise
+  // it's easy to forget the separate trip to Roster -> Sync with
+  // Schedule, and run coverage against stale availability without
+  // noticing. Same human-reviewed confirm dialog as clicking the
+  // button directly, just triggered automatically instead of relying
+  // on someone to remember it.
+  deriveAvailabilityFromSchedule();
 }
 
 function parseCSVLine(line) {
@@ -5437,6 +5643,7 @@ function loadTeacherPeriods() {
     const coverageSkip = items.every(isCoverageSlot);
     const autoSkip = seniorSkip || tripSkip || coverageSkip;
     const checkedAttr = autoSkip ? '' : 'checked';
+    const coNote = !autoSkip && c.coTeacherOf ? ` <span style="font-size:10px;color:var(--amber);font-weight:600">Co-taught with ${esc(c.coTeacherOf)}: check with them before assigning</span>` : '';
     const skipNote = coverageSkip ? ' <span style="font-size:10px;color:var(--amber);font-weight:600">Coverage period — skipped</span>'
       : seniorSkip ? ' <span style="font-size:10px;color:var(--amber);font-weight:600">Senior class — skipped</span>'
       : tripSkip ? ' <span style="font-size:10px;color:var(--amber);font-weight:600">Grade out — skipped</span>' : '';
@@ -5447,7 +5654,7 @@ function loadTeacherPeriods() {
         data-section="${esc(c.section)}"
         data-room="${esc(liveRoom)}" />
       <div>
-        <div style="font-weight:600;font-size:13px">Period ${period} — ${esc(c.courseName)}${skipNote}</div>
+        <div style="font-weight:600;font-size:13px">Period ${period} — ${esc(c.courseName)}${skipNote}${coNote}</div>
         <div style="font-size:11px;color:var(--gray-400)">Section: ${esc(c.section)}${liveRoom ? ' · Room: ' + esc(liveRoom) : ''}</div>
       </div>
     </label>`;
@@ -6767,6 +6974,18 @@ function renderScheduleInspector() {
     const unique = [...new Set(names)].sort();
     teacherSel.innerHTML = '<option value="">Select...</option>' + unique.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
     if (current) teacherSel.value = current;
+    const coSel = document.getElementById('si-co-teacher');
+    if (coSel) {
+      const cur = coSel.value;
+      coSel.innerHTML = teacherSel.innerHTML;
+      if (cur) coSel.value = cur;
+    }
+    const dl = document.getElementById('si-co-sections');
+    if (dl) {
+      const secs = new Set();
+      Object.values(scheduleData).forEach(cl => cl.forEach(c => { if (!c.coTeacherOf && c.section) secs.add(c.section); }));
+      dl.innerHTML = [...secs].sort().map(x => `<option value="${esc(x)}"></option>`).join('');
+    }
   }
 
   Object.entries(scheduleData).forEach(([teacher, classes]) => {
@@ -6787,7 +7006,7 @@ function renderScheduleInspector() {
   tbody.innerHTML = rows.map((r, i) => `
     <tr id="si-row-${i}" style="${r.mismatch ? 'background:var(--amber-light)' : ''}">
       <td>${esc(r.teacher)}</td>
-      <td style="font-weight:600">${esc(r.section)}</td>
+      <td style="font-weight:600">${esc(r.section)}${r.coTeacherOf ? ` <span class="tag" style="font-weight:500" title="Co-teacher">co-teacher with ${esc(r.coTeacherOf)}</span>` : ''}${r.manual ? ' <span class="tag tag-green" style="font-weight:500" title="Kept when a new schedule is uploaded">added by hand</span>' : ''}</td>
       <td>${esc(r.courseName)}</td>
       <td>${esc(r.day)}</td>
       <td style="text-align:center">${r.period}</td>
@@ -6835,7 +7054,7 @@ function scheduleAddClass() {
 
   const room = getRoomFromChart(section, day, period) || roomInput;
   if (!scheduleData[teacher]) scheduleData[teacher] = [];
-  scheduleData[teacher].push({ day, period, courseName, section, room });
+  scheduleData[teacher].push({ day, period, courseName, section, room, manual: true });
   saveScheduleToStorage();
 
   // Clear form
@@ -6845,6 +7064,32 @@ function scheduleAddClass() {
 
   renderScheduleInspector();
   refreshAbsenceDropdowns();
+}
+
+// Adds a co-teacher to every meeting of a class, marked manual so it's
+// carried over onto future uploads (carryOverManualEntries).
+function scheduleAddCoTeacher() {
+  const section = document.getElementById('si-co-section').value.trim();
+  const coTeacher = document.getElementById('si-co-teacher').value;
+  if (!section || !coTeacher) { alert('Pick a class and a co-teacher.'); return; }
+  const key = section.toUpperCase();
+  const owner = Object.keys(scheduleData).find(t => t !== coTeacher && scheduleData[t].some(c => !c.coTeacherOf && String(c.section).toUpperCase() === key));
+  if (!owner) { alert(`No class "${section}" in the loaded schedule.`); return; }
+  const meetings = scheduleData[owner].filter(c => !c.coTeacherOf && String(c.section).toUpperCase() === key);
+  if (!scheduleData[coTeacher]) scheduleData[coTeacher] = [];
+  let added = 0;
+  meetings.forEach(m => {
+    if (scheduleData[coTeacher].some(x => x.section === m.section && x.day === m.day && x.period === m.period)) return;
+    scheduleData[coTeacher].push({ ...m, coTeacherOf: owner, manual: true });
+    added++;
+  });
+  saveScheduleToStorage();
+  document.getElementById('si-co-section').value = '';
+  renderScheduleInspector();
+  refreshAbsenceDropdowns();
+  showImportAlert('success', added
+    ? `${coTeacher} added to ${meetings[0].section} (${added} meeting${added !== 1 ? 's' : ''}), co-teaching with ${owner}.`
+    : `${coTeacher} was already on every meeting of ${meetings[0].section}.`);
 }
 
 function scheduleEditRow(rowIdx, r) {
@@ -6866,7 +7111,8 @@ function scheduleSaveEdit(rowIdx, teacher, classIdx) {
 
   const room = getRoomFromChart(section, day, period) || roomInput;
   if (scheduleData[teacher] && scheduleData[teacher][classIdx] !== undefined) {
-    scheduleData[teacher][classIdx] = { day, period, courseName, section, room };
+    // Keep level/subject and the manual/co-teacher marks; only the edited fields change
+    scheduleData[teacher][classIdx] = { ...scheduleData[teacher][classIdx], day, period, courseName, section, room };
     saveScheduleToStorage();
   }
   renderScheduleInspector();
