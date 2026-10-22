@@ -1231,7 +1231,7 @@
 <div class="modal-overlay" id="coteacher-modal">
   <div class="modal" style="max-width:560px" role="dialog" aria-modal="true" aria-labelledby="coteacher-modal-title">
     <div class="modal-title" id="coteacher-modal-title">Co-Teachers</div>
-    <p style="font-size:12px;color:var(--gray-600);margin-bottom:12px">Adds a second teacher to every meeting of a class. Kept when a new schedule is uploaded. If they're out, the class still gets a sub, flagged to check with the main teacher first.</p>
+    <p style="font-size:12px;color:var(--gray-600);margin-bottom:12px">Adds a second teacher to every meeting of a class. Kept when a new schedule is uploaded. If they're out, the class still gets a sub, flagged to check with the main teacher first. Remove one with ✕ (click twice); one from the schedule file then stays off future uploads too.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">
       <div>
         <label style="font-size:11px" for="si-co-section">Class</label>
@@ -2329,12 +2329,13 @@ function touchBlob(name) {
 // from another computer that happens to sync a moment later.
 function buildDailyGlobals() {
   const payload = buildBackupPayload();
-  return { seniorClassesEnded: payload.seniorClassesEnded, emailTemplate: payload.emailTemplate };
+  return { seniorClassesEnded: payload.seniorClassesEnded, emailTemplate: payload.emailTemplate, coTeacherRemoved: payload.coTeacherRemoved };
 }
 
 function applyDailyGlobals(data) {
   if (data.seniorClassesEnded !== undefined) localStorage.setItem('cs_senior_ended', data.seniorClassesEnded);
   if (data.emailTemplate !== undefined) localStorage.setItem('cs_email_template', data.emailTemplate);
+  if (Array.isArray(data.coTeacherRemoved)) setData('cs_coteacher_removed', data.coTeacherRemoved);
   loadSeniorClassesFlag();
 }
 
@@ -5140,11 +5141,13 @@ function loadScheduleCSV(event) {
       const knownNames = new Set(Object.keys(newData).concat(getRoster().map(t => t.name)));
       const lastIdx = lastNameIndex(knownNames);
       const unmatchedCoTeachers = [];
+      const removedCo = new Set(getData('cs_coteacher_removed', []));
       coTeacherRows.forEach(({ main, raw, meetings }) => {
         const { names, unmatched } = splitCoTeacherNames(raw, knownNames, lastIdx);
         unmatched.forEach(u => unmatchedCoTeachers.push(`${u} (${meetings[0]?.section || main})`));
         names.forEach(name => {
           if (name === main) return;
+          if (removedCo.has(coTeacherKey(name, meetings[0]?.section))) return; // removed in the Co-Teacher popup
           if (!newData[name]) newData[name] = [];
           meetings.forEach(m => {
             if (!newData[name].some(x => x.section === m.section && x.day === m.day && x.period === m.period)) {
@@ -6246,6 +6249,7 @@ async function applyBackupPayload(payload) {
       if (payload.roomChart) setData('cs_roomchart', payload.roomChart);
       if (payload.seniorClassesEnded !== undefined) localStorage.setItem('cs_senior_ended', payload.seniorClassesEnded);
       if (payload.emailTemplate) localStorage.setItem('cs_email_template', payload.emailTemplate);
+      if (Array.isArray(payload.coTeacherRemoved)) setData('cs_coteacher_removed', payload.coTeacherRemoved);
       // Restore per-date absences
       Object.entries(payload.absences || {}).forEach(([date, abs]) => {
         setData('cs_absences_' + date, abs);
@@ -6376,6 +6380,7 @@ function buildBackupPayload() {
     schedule: getData('cs_schedule', {}),
     roomChart: getData('cs_roomchart', {}),
     seniorClassesEnded: localStorage.getItem('cs_senior_ended') || '0',
+    coTeacherRemoved: getData('cs_coteacher_removed', []),
     emailTemplate: localStorage.getItem('cs_email_template') || '',
     absences,
     notes,
@@ -7104,6 +7109,11 @@ function scheduleAddClass() {
 }
 
 // Co-Teacher popup (button next to Field Trip on Run Coverage)
+// Co-teachers removed in the popup, as "teacher||CLASS ID". Ones that came
+// from the schedule file are skipped on future uploads too. Synced and
+// backed up with the other non-date settings (buildDailyGlobals).
+function coTeacherKey(teacher, section) { return `${teacher}||${String(section || '').toUpperCase()}`; }
+
 let _coClassChoices = new Map(); // dropdown label -> Class ID
 function openCoTeacherModal() {
   const names = [...new Set(Object.keys(scheduleData).concat(getRoster().map(t => t.name)))].sort();
@@ -7140,18 +7150,41 @@ function renderCoTeacherList() {
   const rows = [...seen.values()].sort((a, b) => a.section.localeCompare(b.section) || a.teacher.localeCompare(b.teacher));
   el.innerHTML = rows.length
     ? '<table style="font-size:12px;width:100%"><thead><tr><th>Class</th><th>Co-teacher</th><th>Main teacher</th><th><span class="sr-only">Remove</span></th></tr></thead><tbody>'
-      + rows.map(r => `<tr><td>${esc(r.section)}</td><td>${esc(r.teacher)}</td><td>${esc(r.main)}</td><td>${r.manual
-        ? `<button class="btn btn-ghost btn-sm" data-t="${esc(r.teacher)}" data-s="${esc(r.section)}" onclick="removeCoTeacher(this.dataset.t, this.dataset.s)">Remove</button>`
-        : '<span style="color:var(--gray-600)">from schedule file</span>'}</td></tr>`).join('')
+      + rows.map(r => `<tr><td>${esc(r.section)}</td><td>${esc(r.teacher)}${r.manual ? '' : ' <span style="color:var(--gray-600);font-size:11px">(from file)</span>'}</td><td>${esc(r.main)}</td>`
+        + `<td style="text-align:right"><button class="btn btn-ghost btn-sm co-remove" data-t="${esc(r.teacher)}" data-s="${esc(r.section)}" aria-label="Remove ${esc(r.teacher)} from ${esc(r.section)}" title="Remove" onclick="coRemoveClick(this)">✕</button></td></tr>`).join('')
       + '</tbody></table>'
     : '<p style="font-size:12px;color:var(--gray-600)">No co-teachers yet.</p>';
 }
 
+// ✕ asks once in place: the first click turns it into a red "Remove?"
+// button, the second removes. Goes back to ✕ after a few seconds.
+function coRemoveClick(btn) {
+  if (btn.dataset.armed) { removeCoTeacher(btn.dataset.t, btn.dataset.s); return; }
+  btn.dataset.armed = '1';
+  btn.textContent = 'Remove?';
+  btn.classList.replace('btn-ghost', 'btn-danger');
+  setTimeout(() => {
+    if (!btn.isConnected) return;
+    delete btn.dataset.armed;
+    btn.textContent = '✕';
+    btn.classList.replace('btn-danger', 'btn-ghost');
+  }, 4000);
+}
+
 function removeCoTeacher(teacher, section) {
-  if (!confirm(`Remove ${teacher} as co-teacher on ${section}?`)) return;
+  let fromFile = false;
   if (scheduleData[teacher]) {
-    scheduleData[teacher] = scheduleData[teacher].filter(c => !(c.manual && c.coTeacherOf && c.section === section));
+    scheduleData[teacher] = scheduleData[teacher].filter(c => {
+      const match = c.coTeacherOf && c.section === section;
+      if (match && !c.manual) fromFile = true;
+      return !match;
+    });
     if (!scheduleData[teacher].length) delete scheduleData[teacher];
+  }
+  if (fromFile) {
+    const removed = new Set(getData('cs_coteacher_removed', []));
+    removed.add(coTeacherKey(teacher, section));
+    setData('cs_coteacher_removed', [...removed]);
   }
   saveScheduleToStorage();
   renderCoTeacherList();
@@ -7171,6 +7204,8 @@ function scheduleAddCoTeacher() {
   const owner = Object.keys(scheduleData).find(t => t !== coTeacher && scheduleData[t].some(c => !c.coTeacherOf && String(c.section).toUpperCase() === key));
   if (!owner) { alert(`No class "${section}" in the loaded schedule.`); return; }
   const meetings = scheduleData[owner].filter(c => !c.coTeacherOf && String(c.section).toUpperCase() === key);
+  const removed = getData('cs_coteacher_removed', []);
+  if (removed.includes(coTeacherKey(coTeacher, section))) setData('cs_coteacher_removed', removed.filter(k => k !== coTeacherKey(coTeacher, section)));
   if (!scheduleData[coTeacher]) scheduleData[coTeacher] = [];
   let added = 0;
   meetings.forEach(m => {
