@@ -3117,7 +3117,7 @@ function teacherLevel(teacherName) {
   const classes = scheduleData[teacherName];
   if (!classes) return null;
   const sectionLevels = new Map(); // section -> level, first one wins
-  classes.forEach(c => { if (c.level && !sectionLevels.has(c.section)) sectionLevels.set(c.section, c.level); });
+  classes.forEach(c => { if (c.level && !c.levelInferred && !sectionLevels.has(c.section)) sectionLevels.set(c.section, c.level); });
   let ms = 0, us = 0;
   sectionLevels.forEach(level => { if (level === 'MS') ms++; else if (level === 'US') us++; });
   if (ms === 0 && us === 0) return null;
@@ -5215,7 +5215,18 @@ function loadScheduleCSV(event) {
         const courseName = (cols[idx.description] || '').trim();
         const section = (cols[idx.classId] || '').trim();
         const fallbackRoom = idx.room >= 0 ? (cols[idx.room] || '').trim() : '';
-        const { level, subject } = idx.subject >= 0 ? parseSubjectField(cols[idx.subject]) : {};
+        const parsedSubject = idx.subject >= 0 ? parseSubjectField(cols[idx.subject]) : {};
+        const subject = parsedSubject.subject;
+        // No "MS:"/"US:" in Subject (e.g. "Advisory" for grades 6-8): work
+        // the level out from the grade in the class ID or name, so an MS
+        // class still prefers an MS teacher. Marked levelInferred so it
+        // doesn't count toward the teacher's own level (teacherLevel).
+        let level = parsedSubject.level;
+        let levelInferred;
+        if (!level) {
+          level = levelFromGrades(section, courseName) || undefined;
+          levelInferred = level ? true : undefined;
+        }
 
         // Parse meeting times like "M-3", "T-5, W-5", "MWR-1, F-7"
         const slots = parseMeetingTimes(meetingTimes);
@@ -5228,7 +5239,7 @@ function loadScheduleCSV(event) {
           // Look up specific room from room chart first
           const chartRoom = getRoomFromChart(section, day, period);
           const room = chartRoom || fallbackRoom;
-          return { day, period, courseName, section, room, level, subject };
+          return levelInferred ? { day, period, courseName, section, room, level, subject, levelInferred } : { day, period, courseName, section, room, level, subject };
         });
         newData[teacher].push(...meetings);
         if (idx.coTeachers >= 0 && (cols[idx.coTeachers] || '').trim()) {
@@ -6902,6 +6913,22 @@ const GRADE_SECTION_RE = /(?:^|\s)(\d{1,2}(?:\/\d{1,2})*)-\d/;
 function classGrades(c) {
   const m = String(c.section || '').match(GRADE_SECTION_RE) || String(c.courseName || '').match(GRADE_SECTION_RE);
   return m ? m[1].split('/').map(g => String(parseInt(g, 10))) : [];
+}
+
+// 'MS' for grades 6-8, 'US' for 9-12, from a class ID like "ADV 7-2" or,
+// failing that, a standalone grade number in the name ("Advisory 7").
+// null when there's no grade or it mixes MS and US grades.
+function levelFromGrades(section, courseName) {
+  let grades = classGrades({ section, courseName });
+  if (!grades.length) {
+    const m = `${section || ''} ${courseName || ''}`.match(/(?:^|[^\d])(1[0-2]|[6-9])(?:[^\d]|$)/);
+    if (m) grades = [m[1]];
+  }
+  if (!grades.length) return null;
+  const nums = grades.map(Number);
+  if (nums.every(n => n >= 6 && n <= 8)) return 'MS';
+  if (nums.every(n => n >= 9 && n <= 12)) return 'US';
+  return null;
 }
 
 function classAllInGrades(c, grades) {
