@@ -38,7 +38,9 @@ test.describe('Schedule uploads: co-teachers, hand-added classes, change check',
       + 'Carl Moss,ART 8-1,Art,F-2,Active,12,\n');
     await page.evaluate(() => showScreen('run'));
     await page.getByRole('button', { name: 'Co-Teacher' }).click();
-    await page.fill('#si-co-section', 'ENG 9-1');
+    const choices = await page.evaluate(() => [...document.querySelectorAll('#si-co-sections option')].map(o => o.value));
+    expect(choices).toEqual(['Algebra · MTH 10-1 · Bob Jones', 'Art · ART 8-1 · Carl Moss', 'English 9 · ENG 9-1 · Jane Smith']);
+    await page.fill('#si-co-section', 'English 9 · ENG 9-1 · Jane Smith');
     await page.selectOption('#si-co-teacher', 'Bob Jones');
     await page.locator('#coteacher-modal').getByRole('button', { name: 'Add', exact: true }).click();
     await expect(page.locator('#coteacher-list')).toContainText('ENG 9-1');
