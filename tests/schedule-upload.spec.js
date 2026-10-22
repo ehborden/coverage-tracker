@@ -44,7 +44,7 @@ test.describe('Schedule uploads: co-teachers, hand-added classes, change check',
     await page.selectOption('#si-co-teacher', 'Bob Jones');
     await page.locator('#coteacher-modal').getByRole('button', { name: 'Add', exact: true }).click();
     await expect(page.locator('#coteacher-list')).toContainText('ENG 9-1');
-    await expect(page.locator('#coteacher-list').getByRole('button', { name: 'Remove' })).toBeVisible();
+    await expect(page.locator('#coteacher-list .co-remove')).toBeVisible();
     await page.locator('#coteacher-modal').getByRole('button', { name: 'Done' }).click();
     expect(await page.evaluate(() => scheduleData['Bob Jones'].some(c => c.section === 'ENG 9-1' && c.manual && c.coTeacherOf === 'Jane Smith'))).toBe(true);
 
@@ -135,5 +135,26 @@ test.describe('Schedule uploads: co-teachers, hand-added classes, change check',
     await upload(page, csv);
     await page.locator('#schedule-diff-modal').getByRole('button', { name: 'Apply' }).click();
     expect(await page.evaluate(() => scheduleData['Rosado-Gonzalez, Jonathan'].some(c => c.coTeacherOf))).toBe(false);
+  });
+  test('several co-teachers can be removed at once: check them, then Remove selected twice', async ({ page }) => {
+    await upload(page, 'Teacher,Class ID,Description,Meeting Times,Status,Room,Teachers\n'
+      + '"Kartzman, Lauren",STEAM 8-1,STEAM 8-1,W-3,Active,14,Rosado-Gonzalez/Kartzman/Lee\n'
+      + '"Rosado-Gonzalez, Jonathan",STEAM 6,STEAM 6,M-1,Active,14,Rosado-Gonzalez/Kartzman\n'
+      + '"Lee, Amy",HIS 10-1,History,F-5,Active,20,"Lee, Amy"\n');
+    await page.evaluate(() => showScreen('run'));
+    await page.getByRole('button', { name: 'Co-Teacher' }).click();
+    await expect(page.locator('.co-pick')).toHaveCount(3);
+    const btn = page.locator('#co-remove-selected');
+    await expect(btn).toBeDisabled();
+    await page.locator('.co-pick').nth(0).check();
+    await page.locator('.co-pick').nth(1).check();
+    await expect(btn).toHaveText('Remove selected (2)');
+    await btn.click();
+    await expect(btn).toHaveText('Remove 2?');
+    await btn.click();
+    await expect(page.locator('.co-pick')).toHaveCount(1);
+
+    await page.locator('#co-select-all').check();
+    await expect(page.locator('#co-remove-selected')).toHaveText('Remove selected (1)');
   });
 });
