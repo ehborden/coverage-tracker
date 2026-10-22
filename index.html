@@ -5138,8 +5138,12 @@ function loadScheduleCSV(event) {
       // Co-teachers listed in the file get the same meetings, marked as
       // co-taught so an absence on their side is flagged (see coTeacherOf).
       const knownNames = new Set(Object.keys(newData).concat(getRoster().map(t => t.name)));
+      const lastIdx = lastNameIndex(knownNames);
+      const unmatchedCoTeachers = [];
       coTeacherRows.forEach(({ main, raw, meetings }) => {
-        splitCoTeacherNames(raw, knownNames).forEach(name => {
+        const { names, unmatched } = splitCoTeacherNames(raw, knownNames, lastIdx);
+        unmatched.forEach(u => unmatchedCoTeachers.push(`${u} (${meetings[0]?.section || main})`));
+        names.forEach(name => {
           if (name === main) return;
           if (!newData[name]) newData[name] = [];
           meetings.forEach(m => {
@@ -5150,7 +5154,7 @@ function loadScheduleCSV(event) {
         });
       });
 
-      applyScheduleUpload(newData, { parsed, unparsedRows });
+      applyScheduleUpload(newData, { parsed, unparsedRows, unmatchedCoTeachers });
     } catch(err) {
       showImportAlert('error', 'Could not parse schedule CSV: ' + err.message);
     }
@@ -5165,20 +5169,49 @@ function loadScheduleCSV(event) {
 // schedule and are carried over onto every new upload. A co-teacher entry
 // also carries coTeacherOf: <main teacher>, from the file or by hand.
 
-const CO_TEACHER_HEADERS = ['co-teacher', 'co-teachers', 'co teacher', 'co teachers', 'coteacher', 'coteachers',
+// "Teachers" is what the Veracross Find Classes export calls it: every
+// teacher on the class, by last name, slash-separated
+// ("Rosado-Gonzalez/Kartzman"), or the one full name when there's only one.
+const CO_TEACHER_HEADERS = ['teachers', 'co-teacher', 'co-teachers', 'co teacher', 'co teachers', 'coteacher', 'coteachers',
   'co-teacher(s)', 'additional teacher', 'additional teachers', 'other teachers'];
 
-// "Smith, Jane; Lee, Amy" → two names. Semicolons, pipes and new lines
-// always separate; a comma separates only when every piece is a known
-// teacher (names in this school's export can contain commas themselves).
-function splitCoTeacherNames(raw, knownNames) {
-  const out = [];
-  String(raw || '').split(/[;|\n]/).map(x => x.trim()).filter(Boolean).forEach(piece => {
-    if (knownNames.has(piece) || !piece.includes(',')) { out.push(piece); return; }
-    const parts = piece.split(',').map(x => x.trim()).filter(Boolean);
-    if (parts.every(x => knownNames.has(x))) out.push(...parts); else out.push(piece);
+// Last name → full names, from "Last, First" (or "First Last") names.
+function lastNameIndex(knownNames) {
+  const idx = new Map();
+  knownNames.forEach(n => {
+    const last = (n.includes(',') ? n.split(',')[0] : n.trim().split(/\s+/).pop()).trim().toLowerCase();
+    if (!idx.has(last)) idx.set(last, []);
+    idx.get(last).push(n);
   });
-  return [...new Set(out)];
+  return idx;
+}
+
+// One cell of the teachers column → { names: [full names], unmatched: [pieces] }.
+// Slashes, semicolons, pipes and new lines separate; a piece is matched as
+// a full name first, then as a last name (only if exactly one teacher has
+// it). A comma separates only when every piece is a known teacher, since
+// "Last, First" names contain commas themselves. Any number of teachers.
+function splitCoTeacherNames(raw, knownNames, lastIdx) {
+  lastIdx = lastIdx || lastNameIndex(knownNames);
+  const names = [], unmatched = [];
+  const resolve = (piece) => {
+    if (knownNames.has(piece)) return piece;
+    const hits = lastIdx.get(piece.toLowerCase()) || [];
+    return hits.length === 1 ? hits[0] : null;
+  };
+  String(raw || '').split(/[\/;|\n]/).map(x => x.trim()).filter(Boolean).forEach(piece => {
+    let hit = resolve(piece);
+    if (hit) { names.push(hit); return; }
+    if (piece.includes(',')) {
+      const parts = piece.split(',').map(x => x.trim()).filter(Boolean).map(resolve);
+      if (parts.length > 1 && parts.every(Boolean)) { names.push(...parts); return; }
+    }
+    // A full name ("Lee, Amy" / "Amy Lee") is kept as written, e.g. a
+    // specialist who only co-teaches; a bare last name that matches no
+    // one can't be turned into a full name, so it's reported instead.
+    if (/[ ,]/.test(piece)) names.push(piece); else unmatched.push(piece);
+  });
+  return { names: [...new Set(names)], unmatched };
 }
 
 // Hand-added entries from the current schedule, re-applied onto a new
@@ -5260,6 +5293,7 @@ function applyScheduleUpload(newData, info) {
   const carried = carryOverManualEntries(scheduleData, newData);
   _pendingScheduleUpload = { data: carried.data, info, kept: carried.kept, dropped: carried.dropped };
   if (!Object.keys(scheduleData || {}).length) { commitScheduleUpload(); return; }
+  _pendingScheduleUpload.reviewed = true; // unmatched names are listed in the window below
   const d = diffSchedules(scheduleData, newData);
   const list = (title, items) => items.length
     ? `<div style="margin-bottom:10px"><strong>${esc(title)} (${items.length})</strong><ul style="margin:4px 0 0 18px;padding:0">`
@@ -5272,7 +5306,8 @@ function applyScheduleUpload(newData, info) {
     (changes || '<p>No class changes compared with the current schedule.</p>')
     + (d.roomChanges ? `<p style="color:var(--gray-600)">${d.roomChanges} room change${d.roomChanges !== 1 ? 's' : ''} (not listed).</p>` : '')
     + list('Added by hand, kept', carried.kept)
-    + (carried.dropped.length ? list('Added by hand, but the class is no longer in the file (dropped)', carried.dropped) : '');
+    + (carried.dropped.length ? list('Added by hand, but the class is no longer in the file (dropped)', carried.dropped) : '')
+    + list('Names in the Teachers column that matched no teacher (skipped)', (info.unmatchedCoTeachers || []));
   document.getElementById('schedule-diff-modal').classList.add('open');
 }
 
@@ -5293,8 +5328,14 @@ function commitScheduleUpload() {
   document.getElementById('schedule-status').textContent = `${teacherCount} teachers loaded`;
   let statusMsg = `Schedule loaded: ${teacherCount} teachers, ${parsed} class sections.`;
   if (pending.kept.length) statusMsg += ` Kept ${pending.kept.length} class${pending.kept.length !== 1 ? 'es' : ''} added by hand.`;
+  const unmatchedCo = pending.info.unmatchedCoTeachers || [];
+  if (unmatchedCo.length) statusMsg += ` ${unmatchedCo.length} name${unmatchedCo.length !== 1 ? 's' : ''} in the Teachers column matched no teacher: ${unmatchedCo.slice(0, 5).join(', ')}${unmatchedCo.length > 5 ? '...' : ''}.`;
   if (unparsedRows.length > 0) statusMsg += ` ${unparsedRows.length} row(s) had a meeting time that couldn't be read and were skipped.`;
   showImportAlert(unparsedRows.length > 0 ? 'error' : 'success', statusMsg);
+  if (unmatchedCo.length && !pending.reviewed) {
+    alert(`These names in the Teachers column didn't match any teacher, so they weren't added as co-teachers:\n\n`
+      + unmatchedCo.slice(0, 30).join('\n') + (unmatchedCo.length > 30 ? `\n...and ${unmatchedCo.length - 30} more.` : ''));
+  }
   if (unparsedRows.length > 0) {
     alert(`These rows had a meeting time that couldn't be read, so they're missing from the schedule (and from anything, like the multi-day range, that depends on it):\n\n`
       + unparsedRows.slice(0, 30).join('\n')

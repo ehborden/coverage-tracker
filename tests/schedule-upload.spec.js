@@ -95,4 +95,23 @@ test.describe('Schedule uploads: co-teachers, hand-added classes, change check',
     await expect(page.locator('#output-doc')).toContainText('Free Teacher');
     await expect(page.locator('#output-doc')).toContainText('Co-taught with Jane Smith. Check with them first');
   });
+  test('the Veracross "Teachers" column (last names, slash-separated) is read as co-teachers', async ({ page }) => {
+    const dialogs = [];
+    page.on('dialog', d => dialogs.push(d.message()));
+    await upload(page, 'Teacher,Class ID,Description,Meeting Times,Status,Room,Teachers\n'
+      + '"Rosado-Gonzalez, Jonathan",STEAM 6,STEAM 6,M-1,Active,14,Rosado-Gonzalez/Kartzman\n'
+      + '"Kartzman, Lauren",STEAM 7-1,STEAM 7-1,T-2,Active,14,"Kartzman, Lauren"\n'
+      + '"Kartzman, Lauren",STEAM 8-1,STEAM 8-1,W-3,Active,14,Rosado-Gonzalez/Kartzman\n'
+      + '"Kartzman, Lauren",STEAM 8-2,STEAM 8-2,R-4,Active,14,Kartzman/Nobodyhere\n'
+      + '"Lee, Amy",HIS 10-1,History,F-5,Active,20,Lee/Kartzman/Rosado-Gonzalez\n');
+    const r = await page.evaluate(() => ({
+      kartzman: scheduleData['Kartzman, Lauren'].filter(c => c.coTeacherOf).map(c => [c.section, c.coTeacherOf]),
+      rosado: scheduleData['Rosado-Gonzalez, Jonathan'].filter(c => c.coTeacherOf).map(c => [c.section, c.coTeacherOf]),
+      teachers: Object.keys(scheduleData).sort(),
+    }));
+    expect(r.kartzman).toEqual([['STEAM 6', 'Rosado-Gonzalez, Jonathan'], ['HIS 10-1', 'Lee, Amy']]);
+    expect(r.rosado).toEqual([['STEAM 8-1', 'Kartzman, Lauren'], ['HIS 10-1', 'Lee, Amy']]);
+    expect(r.teachers).toEqual(['Kartzman, Lauren', 'Lee, Amy', 'Rosado-Gonzalez, Jonathan']);
+    expect(dialogs.join('\n')).toContain('Nobodyhere (STEAM 8-2)');
+  });
 });
