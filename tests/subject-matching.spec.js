@@ -228,6 +228,7 @@ test.describe('MS/subject-aware coverage picks (derived from the Schedule CSV)',
         'HS Background': [{ day: 'Tuesday', period: 1, courseName: 'Biology', section: '', room: '', level: 'US', subject: 'Science' }],
       };
       document.getElementById('run-date').value = '2026-06-01'; // a Monday
+      renderAbsencesTable();
       document.getElementById('absences-tbody').innerHTML = '';
       addAbsenceRowWithData('Absent HS Teacher', 2, 'Chemistry', '12-1', '');
       addAbsenceRowWithData('Absent MS Teacher', 2, 'Algebra', '7-1', '');
