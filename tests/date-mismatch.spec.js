@@ -29,11 +29,14 @@ async function seed(page) {
         { day: 'Wednesday', period: 4, courseName: 'Intro to Psychology', section: 'SCI 11-3', room: '518' },
       ],
     };
+    // Go to Monday first, so the table the app opened on (whatever day
+    // it is when the test runs) is saved before the test data goes in
+    document.getElementById('run-date').value = MON;
+    onDateChange();
     // Wednesday already has its own real absence; Monday has Ann
     setData('cs_absences_' + WED, [{ teacher: 'Other, Ann', period: 2, course: 'Wed Class', section: 'W-1', room: '1', noCoverage: false, absType: 'normal' }]);
     setData('cs_absences_' + MON, [{ teacher: 'Other, Ann', period: 5, course: 'Mon Class', section: 'M-1', room: '1', noCoverage: false, absType: 'normal' }]);
-    document.getElementById('run-date').value = MON;
-    onDateChange();
+    renderAbsencesTable();
     // The browser puts an old value back: no change event fires
     document.getElementById('run-date').value = WED;
   }, { MON, WED });
