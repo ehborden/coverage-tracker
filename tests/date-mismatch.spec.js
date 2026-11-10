@@ -16,24 +16,27 @@ async function seed(page) {
       lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0 });
     const none = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [] };
     setRoster([
-      t('t1', 'LiPuma, Kaitlyn', none),
+      t('t1', 'Testa, Morgan', none),
       t('t2', 'Other, Ann', none),
       t('t3', 'Free, Sam', { Monday: [5], Tuesday: [], Wednesday: [2], Thursday: [], Friday: [] }),
     ]);
     setLog([]);
     scheduleData = {
-      'LiPuma, Kaitlyn': [
+      'Testa, Morgan': [
         { day: 'Monday', period: 1, courseName: 'Algebra II 11-4', section: 'MATH 11-4', room: '403' },
         { day: 'Monday', period: 6, courseName: 'Intro to Psychology', section: 'SCI 11-3', room: '518' },
         { day: 'Wednesday', period: 3, courseName: 'Calculus H', section: 'MATH 12-H', room: '403' },
         { day: 'Wednesday', period: 4, courseName: 'Intro to Psychology', section: 'SCI 11-3', room: '518' },
       ],
     };
+    // Go to Monday first, so the table the app opened on (whatever day
+    // it is when the test runs) is saved before the test data goes in
+    document.getElementById('run-date').value = MON;
+    onDateChange();
     // Wednesday already has its own real absence; Monday has Ann
     setData('cs_absences_' + WED, [{ teacher: 'Other, Ann', period: 2, course: 'Wed Class', section: 'W-1', room: '1', noCoverage: false, absType: 'normal' }]);
     setData('cs_absences_' + MON, [{ teacher: 'Other, Ann', period: 5, course: 'Mon Class', section: 'M-1', room: '1', noCoverage: false, absType: 'normal' }]);
-    document.getElementById('run-date').value = MON;
-    onDateChange();
+    renderAbsencesTable();
     // The browser puts an old value back: no change event fires
     document.getElementById('run-date').value = WED;
   }, { MON, WED });
@@ -50,17 +53,17 @@ test('Add by Teacher fills rows for the date the table shows after a picker mism
   await gotoApp(page);
   await seed(page);
   await page.evaluate(() => openAddByTeacher());
-  await page.selectOption('#abt-teacher', 'LiPuma, Kaitlyn');
+  await page.selectOption('#abt-teacher', 'Testa, Morgan');
   await page.evaluate(() => confirmAddByTeacher());
   const stored = await page.evaluate(({ MON, WED }) => {
     saveAbsencesForDate(currentAbsenceDate);
     return { current: currentAbsenceDate, mon: getAbsencesByDate(MON), wed: getAbsencesByDate(WED) };
   }, { MON, WED });
   // The table was lined up with the picker (Wednesday) before rows were
-  // filled, so LiPuma gets Wednesday's classes under Wednesday...
+  // filled, so Testa gets Wednesday's classes under Wednesday...
   expect(stored.current).toBe(WED);
-  const wedLiPuma = stored.wed.filter(a => a.teacher === 'LiPuma, Kaitlyn').map(a => a.period).sort();
-  expect(wedLiPuma).toEqual([3, 4]);
+  const wedTesta = stored.wed.filter(a => a.teacher === 'Testa, Morgan').map(a => a.period).sort();
+  expect(wedTesta).toEqual([3, 4]);
   expect(stored.wed.some(a => a.teacher === 'Other, Ann' && a.period === 2)).toBe(true);
   // ...and Monday is untouched: no Wednesday periods leak into it
   expect(stored.mon).toEqual([{ teacher: 'Other, Ann', period: 5, course: 'Mon Class', section: 'M-1', room: '1', noCoverage: false, absType: 'normal' }]);

@@ -101,25 +101,25 @@ test.describe('Schedule uploads: co-teachers, hand-added classes, change check',
     const dialogs = [];
     page.on('dialog', d => dialogs.push(d.message()));
     await upload(page, 'Teacher,Class ID,Description,Meeting Times,Status,Room,Teachers\n'
-      + '"Rosado-Gonzalez, Jonathan",STEAM 6,STEAM 6,M-1,Active,14,Rosado-Gonzalez/Kartzman\n'
-      + '"Kartzman, Lauren",STEAM 7-1,STEAM 7-1,T-2,Active,14,"Kartzman, Lauren"\n'
-      + '"Kartzman, Lauren",STEAM 8-1,STEAM 8-1,W-3,Active,14,Rosado-Gonzalez/Kartzman\n'
-      + '"Kartzman, Lauren",STEAM 8-2,STEAM 8-2,R-4,Active,14,Kartzman/Nobodyhere\n'
-      + '"Lee, Amy",HIS 10-1,History,F-5,Active,20,Lee/Kartzman/Rosado-Gonzalez\n');
+      + '"Ortega-Reyes, Daniel",STEAM 6,STEAM 6,M-1,Active,14,Ortega-Reyes/Feldmann\n'
+      + '"Feldmann, Petra",STEAM 7-1,STEAM 7-1,T-2,Active,14,"Feldmann, Petra"\n'
+      + '"Feldmann, Petra",STEAM 8-1,STEAM 8-1,W-3,Active,14,Ortega-Reyes/Feldmann\n'
+      + '"Feldmann, Petra",STEAM 8-2,STEAM 8-2,R-4,Active,14,Feldmann/Nobodyhere\n'
+      + '"Lee, Amy",HIS 10-1,History,F-5,Active,20,Lee/Feldmann/Ortega-Reyes\n');
     const r = await page.evaluate(() => ({
-      kartzman: scheduleData['Kartzman, Lauren'].filter(c => c.coTeacherOf).map(c => [c.section, c.coTeacherOf]),
-      rosado: scheduleData['Rosado-Gonzalez, Jonathan'].filter(c => c.coTeacherOf).map(c => [c.section, c.coTeacherOf]),
+      feldmann: scheduleData['Feldmann, Petra'].filter(c => c.coTeacherOf).map(c => [c.section, c.coTeacherOf]),
+      ortega: scheduleData['Ortega-Reyes, Daniel'].filter(c => c.coTeacherOf).map(c => [c.section, c.coTeacherOf]),
       teachers: Object.keys(scheduleData).sort(),
     }));
-    expect(r.kartzman).toEqual([['STEAM 6', 'Rosado-Gonzalez, Jonathan'], ['HIS 10-1', 'Lee, Amy']]);
-    expect(r.rosado).toEqual([['STEAM 8-1', 'Kartzman, Lauren'], ['HIS 10-1', 'Lee, Amy']]);
-    expect(r.teachers).toEqual(['Kartzman, Lauren', 'Lee, Amy', 'Rosado-Gonzalez, Jonathan']);
+    expect(r.feldmann).toEqual([['STEAM 6', 'Ortega-Reyes, Daniel'], ['HIS 10-1', 'Lee, Amy']]);
+    expect(r.ortega).toEqual([['STEAM 8-1', 'Feldmann, Petra'], ['HIS 10-1', 'Lee, Amy']]);
+    expect(r.teachers).toEqual(['Feldmann, Petra', 'Lee, Amy', 'Ortega-Reyes, Daniel']);
     expect(dialogs.join('\n')).toContain('Nobodyhere (STEAM 8-2)');
   });
   test('removing a co-teacher takes two clicks on ✕, and one from the file stays off future uploads', async ({ page }) => {
     const csv = 'Teacher,Class ID,Description,Meeting Times,Status,Room,Teachers\n'
-      + '"Kartzman, Lauren",STEAM 8-1,STEAM 8-1,W-3,Active,14,Rosado-Gonzalez/Kartzman\n'
-      + '"Rosado-Gonzalez, Jonathan",STEAM 6,STEAM 6,M-1,Active,14,"Rosado-Gonzalez, Jonathan"\n';
+      + '"Feldmann, Petra",STEAM 8-1,STEAM 8-1,W-3,Active,14,Ortega-Reyes/Feldmann\n'
+      + '"Ortega-Reyes, Daniel",STEAM 6,STEAM 6,M-1,Active,14,"Ortega-Reyes, Daniel"\n';
     await upload(page, csv);
     await page.evaluate(() => showScreen('run'));
     await page.getByRole('button', { name: 'Co-Teacher' }).click();
@@ -127,19 +127,19 @@ test.describe('Schedule uploads: co-teachers, hand-added classes, change check',
     await expect(x).toHaveText('✕');
     await x.click();
     await expect(x).toHaveText('Remove?');
-    expect(await page.evaluate(() => scheduleData['Rosado-Gonzalez, Jonathan'].some(c => c.coTeacherOf))).toBe(true);
+    expect(await page.evaluate(() => scheduleData['Ortega-Reyes, Daniel'].some(c => c.coTeacherOf))).toBe(true);
     await x.click();
     await expect(page.locator('#coteacher-list')).toContainText('No co-teachers yet.');
-    expect(await page.evaluate(() => scheduleData['Rosado-Gonzalez, Jonathan'].some(c => c.coTeacherOf))).toBe(false);
+    expect(await page.evaluate(() => scheduleData['Ortega-Reyes, Daniel'].some(c => c.coTeacherOf))).toBe(false);
 
     await upload(page, csv);
     await page.locator('#schedule-diff-modal').getByRole('button', { name: 'Apply' }).click();
-    expect(await page.evaluate(() => scheduleData['Rosado-Gonzalez, Jonathan'].some(c => c.coTeacherOf))).toBe(false);
+    expect(await page.evaluate(() => scheduleData['Ortega-Reyes, Daniel'].some(c => c.coTeacherOf))).toBe(false);
   });
   test('several co-teachers can be removed at once: check them, then Remove selected twice', async ({ page }) => {
     await upload(page, 'Teacher,Class ID,Description,Meeting Times,Status,Room,Teachers\n'
-      + '"Kartzman, Lauren",STEAM 8-1,STEAM 8-1,W-3,Active,14,Rosado-Gonzalez/Kartzman/Lee\n'
-      + '"Rosado-Gonzalez, Jonathan",STEAM 6,STEAM 6,M-1,Active,14,Rosado-Gonzalez/Kartzman\n'
+      + '"Feldmann, Petra",STEAM 8-1,STEAM 8-1,W-3,Active,14,Ortega-Reyes/Feldmann/Lee\n'
+      + '"Ortega-Reyes, Daniel",STEAM 6,STEAM 6,M-1,Active,14,Ortega-Reyes/Feldmann\n'
       + '"Lee, Amy",HIS 10-1,History,F-5,Active,20,"Lee, Amy"\n');
     await page.evaluate(() => showScreen('run'));
     await page.getByRole('button', { name: 'Co-Teacher' }).click();

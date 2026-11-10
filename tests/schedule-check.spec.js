@@ -12,18 +12,21 @@ async function seed(page, rows) {
       lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0 });
     const free = { Monday: [1, 2, 3, 4, 5, 6, 7], Tuesday: [], Wednesday: [], Thursday: [], Friday: [] };
     const none = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [] };
-    setRoster([t('t1', 'LiPuma, Kaitlyn', none), t('t2', 'Free, Sam', free), t('t3', 'Typed, Tom', none)]);
+    setRoster([t('t1', 'Testa, Morgan', none), t('t2', 'Free, Sam', free), t('t3', 'Typed, Tom', none)]);
     setLog([]);
     scheduleData = {
-      'LiPuma, Kaitlyn': [
+      'Testa, Morgan': [
         { day: 'Monday', period: 1, courseName: 'Algebra II 11-4', section: 'MATH 11-4', room: '403' },
         { day: 'Monday', period: 6, courseName: 'Intro to Psychology', section: 'SCI 11-3', room: '518' },
         { day: 'Wednesday', period: 3, courseName: 'Calculus H', section: 'MATH 12-H', room: '403' },
         { day: 'Wednesday', period: 4, courseName: 'Intro to Psychology', section: 'SCI 11-3', room: '518' },
       ],
     };
-    setData('cs_absences_' + MON, rows);
+    // Go to Monday first, so the table the app opened on (whatever day
+    // it is when the test runs) is saved before the test data goes in
     document.getElementById('run-date').value = MON;
+    onDateChange();
+    setData('cs_absences_' + MON, rows);
     renderAbsencesTable();
   }, { MON, rows });
 }
@@ -33,20 +36,20 @@ const row = (teacher, period, course, section, absType = 'normal') =>
 
 test('a row with another day\'s class warns and, on Cancel, assigns nothing', async ({ page }) => {
   await gotoApp(page);
-  await seed(page, [row('LiPuma, Kaitlyn', 3, 'Calculus H', 'MATH 12-H'), row('LiPuma, Kaitlyn', 6, 'Intro to Psychology', 'SCI 11-3')]);
+  await seed(page, [row('Testa, Morgan', 3, 'Calculus H', 'MATH 12-H'), row('Testa, Morgan', 6, 'Intro to Psychology', 'SCI 11-3')]);
   const dialogs = [];
   page.on('dialog', d => { dialogs.push(d.message()); d.dismiss(); });
   await page.evaluate(() => runCoverage());
   expect(dialogs).toHaveLength(1);
   expect(dialogs[0]).toContain("This row doesn't match the schedule for Monday, 11/9");
-  expect(dialogs[0]).toContain('LiPuma, Kaitlyn, period 3: the row says Calculus H (MATH 12-H); the schedule has no class then');
+  expect(dialogs[0]).toContain('Testa, Morgan, period 3: the row says Calculus H (MATH 12-H); the schedule has no class then');
   expect(dialogs[0]).not.toContain('period 6');
   expect(await page.evaluate(() => getLog())).toEqual([]);
 });
 
 test('a row with a different class that period names what the schedule has', async ({ page }) => {
   await gotoApp(page);
-  await seed(page, [row('LiPuma, Kaitlyn', 1, 'Intro to Psychology', 'SCI 11-3')]);
+  await seed(page, [row('Testa, Morgan', 1, 'Intro to Psychology', 'SCI 11-3')]);
   const dialogs = [];
   page.on('dialog', d => { dialogs.push(d.message()); d.dismiss(); });
   await page.evaluate(() => runCoverage());
@@ -55,18 +58,18 @@ test('a row with a different class that period names what the schedule has', asy
 
 test('OK on the warning assigns coverage anyway', async ({ page }) => {
   await gotoApp(page);
-  await seed(page, [row('LiPuma, Kaitlyn', 3, 'Calculus H', 'MATH 12-H')]);
+  await seed(page, [row('Testa, Morgan', 3, 'Calculus H', 'MATH 12-H')]);
   page.on('dialog', d => d.accept());
   await page.evaluate(() => runCoverage());
   const log = await page.evaluate(() => getLog());
-  expect(log.map(e => `${e.absentTeacher} ${e.period} ${e.coveringTeacher}`)).toEqual(['LiPuma, Kaitlyn 3 Free, Sam']);
+  expect(log.map(e => `${e.absentTeacher} ${e.period} ${e.coveringTeacher}`)).toEqual(['Testa, Morgan 3 Free, Sam']);
 });
 
 test('no warning for matching rows, Skip rows, or teachers not in the schedule', async ({ page }) => {
   await gotoApp(page);
   await seed(page, [
-    row('LiPuma, Kaitlyn', 1, 'algebra ii 11-4', 'math 11-4'), // case differences still match
-    row('LiPuma, Kaitlyn', 4, '', '', 'skip'),
+    row('Testa, Morgan', 1, 'algebra ii 11-4', 'math 11-4'), // case differences still match
+    row('Testa, Morgan', 4, '', '', 'skip'),
     row('Typed, Tom', 2, 'Some Class', 'X-1'),
   ]);
   const dialogs = [];
