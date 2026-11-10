@@ -22,8 +22,11 @@ async function seed(page, rows) {
         { day: 'Wednesday', period: 4, courseName: 'Intro to Psychology', section: 'SCI 11-3', room: '518' },
       ],
     };
-    setData('cs_absences_' + MON, rows);
+    // Go to Monday first, so the table the app opened on (whatever day
+    // it is when the test runs) is saved before the test data goes in
     document.getElementById('run-date').value = MON;
+    onDateChange();
+    setData('cs_absences_' + MON, rows);
     renderAbsencesTable();
   }, { MON, rows });
 }
