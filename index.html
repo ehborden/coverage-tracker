@@ -768,11 +768,11 @@
       <div class="form-row cols-3">
         <div>
           <label for="run-date">Date</label>
-          <input type="date" id="run-date" onchange="onDateChange()" />
+          <input type="date" autocomplete="off" id="run-date" onchange="onDateChange()" />
         </div>
         <div>
           <label for="run-date-end">End Date (for range)</label>
-          <input type="date" id="run-date-end" placeholder="Optional" title="Someone out several days in a row: repeats these same absence rows across every school day through this date." />
+          <input type="date" autocomplete="off" id="run-date-end" placeholder="Optional" title="Someone out several days in a row: repeats these same absence rows across every school day through this date." />
         </div>
         <div>
           <label for="outside-sub-count">Outside Subs Coming</label>
@@ -867,7 +867,7 @@
         <div class="form-row" style="margin-bottom:16px;align-items:flex-end">
           <div class="fg">
             <label for="manual-date">Date</label>
-            <input type="date" id="manual-date" onchange="renderManualTable()" />
+            <input type="date" autocomplete="off" id="manual-date" onchange="renderManualTable()" />
           </div>
           <button class="btn btn-ghost btn-sm" onclick="renderManualTable()">Load</button>
           <button class="btn btn-ghost btn-sm" onclick="copyManualOutput()">Copy output</button>
@@ -957,7 +957,7 @@
       <div class="flex-between" style="margin-bottom:16px">
         <div class="card-title" style="margin:0">Weekly Coverage Grid</div>
         <div style="display:flex;align-items:center;gap:8px">
-          <input type="date" id="weekly-grid-date" aria-label="Week to show" style="font-size:12px;padding:5px 8px" onchange="renderWeeklyGrid()" />
+          <input type="date" autocomplete="off" id="weekly-grid-date" aria-label="Week to show" style="font-size:12px;padding:5px 8px" onchange="renderWeeklyGrid()" />
           <button class="btn btn-ghost btn-sm" onclick="renderWeeklyGrid()">Refresh</button>
         </div>
       </div>
@@ -1007,7 +1007,7 @@
       <div class="form-row cols-2">
         <div>
           <label for="override-date">Date</label>
-          <input type="date" id="override-date" onchange="loadOverrideEntries()" />
+          <input type="date" autocomplete="off" id="override-date" onchange="loadOverrideEntries()" />
         </div>
         <div style="display:flex;align-items:flex-end;gap:8px">
           <button class="btn btn-primary" onclick="loadOverrideEntries()">Load Assignments</button>
@@ -1177,7 +1177,7 @@
     <div class="form-row cols-2" style="margin-top:12px">
       <div>
         <label for="t-last-date">Last Coverage Date</label>
-        <input type="date" id="t-last-date" />
+        <input type="date" autocomplete="off" id="t-last-date" />
       </div>
       <div>
         <label for="t-total">Total Coverages (Year)</label>
@@ -1224,7 +1224,7 @@
     <p style="color:var(--gray-600);margin-bottom:16px;font-size:13px">This will remove all log entries for the selected date and roll back teacher coverage counts and dates.</p>
     <div>
       <label for="reset-date">Date to Reset</label>
-      <input type="date" id="reset-date" />
+      <input type="date" autocomplete="off" id="reset-date" />
     </div>
     <div class="flex-end mt-20">
       <button class="btn btn-ghost" onclick="closeResetModal()">Cancel</button>
@@ -2018,7 +2018,7 @@ function undoLastAction() {
 }
 
 window.addEventListener('beforeunload', () => {
-  const dateStr = document.getElementById('run-date')?.value;
+  const dateStr = currentAbsenceDate;
   if (dateStr) {
     saveAbsencesForDate(dateStr);
     const count = parseInt(document.getElementById('outside-sub-count')?.value) || 0;
@@ -2796,6 +2796,10 @@ function initSync() {
 //  INIT
 // ═══════════════════════════════════════════════════════
 
+// A page restored by the browser (Back, a reopened tab) can come back
+// with the picker showing a different date than the table: line them up.
+window.addEventListener('pageshow', () => syncAbsenceTableToPicker());
+
 document.addEventListener('DOMContentLoaded', async () => {
   const startDate = defaultDateStr();
   document.getElementById('run-date').value = startDate;
@@ -2820,8 +2824,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     _absencesTableDirty = true;
     clearTimeout(_absenceAutoSaveTimer);
     _absenceAutoSaveTimer = setTimeout(() => {
-      const dateStr = document.getElementById('run-date')?.value;
-      if (dateStr) saveAbsencesForDate(dateStr);
+      if (currentAbsenceDate) saveAbsencesForDate(currentAbsenceDate);
       _absencesTableDirty = false;
     }, 400);
   };
@@ -2872,6 +2875,23 @@ function loadAbsencesForDate(dateStr) {
 }
 
 let currentAbsenceDate = null;
+
+// The absences table always belongs to one date: currentAbsenceDate, the
+// date it was last loaded for. The date picker can come to show a
+// different date without onDateChange ever firing: when the browser
+// restores a page (going Back, reopening a tab it put to sleep), it can
+// put the picker's previous value back after the page has already loaded
+// the table for its own default date. Left alone, the picker then says
+// one day while the table holds another: Add by Teacher fills rows from
+// the picker's weekday, and a save writes the table under the picker's
+// date, over that day's real rows. Called before anything that reads or
+// writes the table against the picker, it treats the picker as a normal
+// date change: the table is saved under its own date, then the picker's
+// date is loaded.
+function syncAbsenceTableToPicker() {
+  const picked = document.getElementById('run-date')?.value;
+  if (picked && currentAbsenceDate && picked !== currentAbsenceDate) onDateChange();
+}
 
 function onDateChange() {
   const newDate = document.getElementById('run-date').value;
@@ -3074,6 +3094,36 @@ function mergeAbsencesIntoDate(d, engineAbsences) {
   const merged = existing.concat(toAdd);
   setData('cs_absences_' + d, merged);
   return engineAbsencesFromStorage(merged);
+}
+
+// Absence rows (Staff and Outside Sub) whose class doesn't match the
+// loaded schedule for that date's weekday and period: either the teacher
+// has no class then, or a different one. A row is matched by Class ID,
+// or by course name when it has no Class ID. Teachers who aren't in the
+// schedule at all are left out, since there's nothing to compare to.
+// This catches wrong-day rows whatever caused them.
+function rowsOffSchedule(absences, dateStr) {
+  const dayName = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
+  const norm = v => String(v || '').trim().toUpperCase();
+  const out = [];
+  absences.forEach(a => {
+    if (a.absType && a.absType !== 'normal' && a.absType !== 'outside') return;
+    const classes = scheduleData[a.absentTeacher];
+    if (!classes) return;
+    const there = classes.filter(c => c.day === dayName && c.period === a.period);
+    const matches = there.some(c => a.sectionNumber
+      ? norm(c.section) === norm(a.sectionNumber)
+      : norm(c.courseName) === norm(a.courseName));
+    if (matches) return;
+    const label = (name, sec) => sec ? `${name} (${sec})` : name;
+    out.push({
+      teacher: a.absentTeacher,
+      period: a.period,
+      row: label(a.courseName || 'a class', a.sectionNumber),
+      scheduled: there.length ? there.map(c => label(c.courseName, c.section)).join(' / ') : 'no class then',
+    });
+  });
+  return out;
 }
 
 // A teacher's real scheduled class for one day+period, from the loaded
@@ -3574,6 +3624,15 @@ function assignCoverage(absences, dateStr, outsideSubCount) {
 // ═══════════════════════════════════════════════════════
 
 async function runCoverage() {
+  // The table on screen isn't the picker's date (see
+  // syncAbsenceTableToPicker): line them up and stop, so nothing runs
+  // on rows the user hasn't seen for that date.
+  const picked = document.getElementById('run-date').value;
+  if (picked && currentAbsenceDate && picked !== currentAbsenceDate) {
+    syncAbsenceTableToPicker();
+    alert(`The absences on screen were for a different date than the one selected. The absences for ${picked} are showing now: check them, then click Assign Coverage again.`);
+    return;
+  }
   const dateStr = document.getElementById('run-date').value;
   if (!dateStr) { alert('Please select a date.'); return; }
   saveAbsencesForDate(dateStr);
@@ -3581,6 +3640,16 @@ async function runCoverage() {
   setData('cs_outsidesubcount_' + dateStr, outsideSubCount);
   const absences = getAbsences();
   if (absences.length === 0) { alert('Please add at least one absence row.'); return; }
+
+  // Rows whose class isn't what the teacher actually has that day and
+  // period: a warning, not a block, since a row typed in by hand on
+  // purpose (a class that isn't in the schedule) is fine to run.
+  const offSchedule = rowsOffSchedule(absences, dateStr);
+  if (offSchedule.length) {
+    const dayLabel = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'numeric', day: 'numeric' });
+    const lines = offSchedule.map(o => `- ${o.teacher}, period ${o.period}: the row says ${o.row}; the schedule has ${o.scheduled}`);
+    if (!confirm(`${offSchedule.length === 1 ? 'This row doesn\'t' : 'These rows don\'t'} match the schedule for ${dayLabel}:\n\n${lines.join('\n')}\n\nOK to assign coverage anyway, or Cancel to fix the rows first.`)) return;
+  }
 
   // "End Date (for range)": someone out several days in a row. Repeat
   // these same rows across every school day through that date, each run
@@ -5733,6 +5802,7 @@ function clearRoster() {
 // ═══════════════════════════════════════════════════════
 
 function openAddByTeacher() {
+  syncAbsenceTableToPicker();
   populateAbtTeacherDropdown();
   document.getElementById('abt-teacher').value = '';
   document.getElementById('abt-periods').innerHTML = '';
@@ -5753,6 +5823,7 @@ function populateAbtTeacherDropdown() {
 }
 
 function loadTeacherPeriods() {
+  syncAbsenceTableToPicker();
   const teacher = document.getElementById('abt-teacher').value;
   const container = document.getElementById('abt-periods');
   const dayInfo = document.getElementById('abt-day-info');
@@ -5909,7 +5980,7 @@ function duplicateAbsenceRow(btn) {
 // Run Coverage runs for this date, since the engine re-reads this row.
 function removeAbsenceRow(btn) {
   const tr = btn.closest('tr');
-  const dateStr = document.getElementById('run-date').value;
+  const dateStr = currentAbsenceDate;
   const sel = tr.querySelector('.abs-teacher');
   const custom = tr.querySelector('.abs-teacher-custom');
   const teacher = sel ? (sel.value === '__custom__' ? (custom ? custom.value.trim() : '') : sel.value) : '';
