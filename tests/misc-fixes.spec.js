@@ -457,4 +457,38 @@ test.describe('Misc regression fixes', () => {
     await page.evaluate(() => { document.getElementById('run-date').value = '2026-06-01'; renderAbsencesTable(); });
     await expect(page.locator('#output-doc')).toContainText('Jane Smith');
   });
+
+  test('Schedule screen Edit/Save/Remove work for a teacher with an apostrophe in their name', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', e => errors.push(e.message));
+    page.on('dialog', d => d.accept());
+    await gotoApp(page);
+    await page.evaluate(() => {
+      scheduleData = { "O'Malley, Rory": [{ day: 'Monday', period: 1, courseName: 'English 9', section: 'ENG 9-1', room: '101' }] };
+      showScreen('schedule');
+    });
+    await page.click('#schedule-inspector-tbody button:has-text("Edit")');
+    await page.fill('#si-e-room-0', '202');
+    await page.click('#schedule-inspector-tbody button:has-text("Save")');
+    expect(await page.evaluate(() => scheduleData["O'Malley, Rory"][0].room)).toBe('202');
+
+    await page.click('#schedule-inspector-tbody button:has-text("Remove")');
+    expect(await page.evaluate(() => Object.keys(scheduleData))).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
+  test('a schedule that cannot be saved (browser storage full) shows the "not being saved" banner instead of failing silently', async ({ page }) => {
+    page.on('dialog', d => d.accept());
+    await gotoApp(page);
+    await page.evaluate(() => {
+      const real = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key, value) {
+        if (key === 'cs_schedule') throw new DOMException('full', 'QuotaExceededError');
+        return real.call(this, key, value);
+      };
+      scheduleData = { 'Avery Stone': [{ day: 'Monday', period: 1, courseName: 'English 9', section: 'ENG 9-1', room: '101' }] };
+      saveScheduleToStorage();
+    });
+    await expect(page.locator('#save-failure-banner')).toContainText('NOT being saved');
+  });
 });

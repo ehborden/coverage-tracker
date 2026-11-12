@@ -146,4 +146,37 @@ test.describe('Run Coverage (single day)', () => {
 
     expect(result.totalCoverages).toBe(1);
   });
+
+  test('a period is not left UNASSIGNED when moving an earlier pick from the same run would cover both', async ({ page }) => {
+    await gotoApp(page);
+    const mk = (id, name, avail, extra = {}) => ({ id, name, tier: '1', highAvail: false, excluded: false,
+      avail: Object.assign({ Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [] }, avail),
+      lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0, ...extra });
+    // Avery is free periods 1 and 5, Blake only period 1. Row order puts
+    // period 1 first, and Avery (more free periods) is the first pick for
+    // it, which used to leave period 5 with nobody while Blake sat unused.
+    const result = await page.evaluate((roster) => {
+      setRoster(roster);
+      const row = (teacher, period) => ({ absentTeacher: teacher, period, courseName: 'Class', sectionNumber: '', roomNumber: '', absType: 'normal' });
+      const out = assignCoverage([row('Dana Wells', 1), row('Eli Park', 5)], '2026-06-01', 0); // a Monday
+      return { picks: out.assignments.map(e => `P${e.period}:${e.coveringTeacher}`), unassigned: out.unassigned.length };
+    }, [mk('a', 'Avery Stone', { Monday: [1, 5] }), mk('b', 'Blake Marsh', { Monday: [1] })]);
+    expect(result.unassigned).toBe(0);
+    expect(result.picks.sort()).toEqual(['P1:Blake Marsh', 'P5:Avery Stone']);
+  });
+
+  test('when every period can be covered anyway, picks are not rearranged', async ({ page }) => {
+    await gotoApp(page);
+    const mk = (id, name, avail, extra = {}) => ({ id, name, tier: '1', highAvail: false, excluded: false,
+      avail: Object.assign({ Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [] }, avail),
+      lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0, ...extra });
+    // Same two absences plus Casey, who can take period 5: nothing would go
+    // unassigned, so Avery keeps period 1 (the fairness pick).
+    const picks = await page.evaluate((roster) => {
+      setRoster(roster);
+      const row = (teacher, period) => ({ absentTeacher: teacher, period, courseName: 'Class', sectionNumber: '', roomNumber: '', absType: 'normal' });
+      return assignCoverage([row('Dana Wells', 1), row('Eli Park', 5)], '2026-06-01', 0).assignments.map(e => `P${e.period}:${e.coveringTeacher}`);
+    }, [mk('a', 'Avery Stone', { Monday: [1, 5] }), mk('b', 'Blake Marsh', { Monday: [1] }), mk('c', 'Casey Lund', { Monday: [5] })]);
+    expect(picks.sort()).toEqual(['P1:Avery Stone', 'P5:Casey Lund']);
+  });
 });
