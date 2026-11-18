@@ -69,6 +69,61 @@ test.describe('Outside sub period exclusions and MS avoidance', () => {
     expect(result.ms).toBe('⚠ UNASSIGNED');
   });
 
+  test('outside subs are only given a dance class (another building) when nothing else is left for that period', async ({ page }) => {
+    await gotoApp(page);
+    page.on('dialog', d => d.accept());
+
+    await page.evaluate(() => {
+      setRoster([]);
+      setLog([]);
+      document.getElementById('run-date').value = '2026-06-01';
+      renderAbsencesTable();
+      document.getElementById('outside-sub-count').value = '1';
+      const fill = (row, teacher, course, section) => {
+        row.querySelector('.abs-teacher').value = '__custom__';
+        row.querySelector('.abs-teacher-custom').value = teacher;
+        row.querySelector('.abs-period').value = '3';
+        row.querySelector('.abs-course').value = course;
+        row.querySelector('.abs-section').value = section;
+      };
+      // Dance row entered first, both high school, same period
+      fill(document.querySelectorAll('#absences-tbody tr')[0], 'Dance Teacher', 'Dance II', 'PERF 10-1');
+      addAbsenceRow();
+      fill(document.querySelectorAll('#absences-tbody tr')[1], 'HS Teacher', 'Algebra', 'MATH 10-1');
+      runCoverage();
+    });
+
+    const result = await page.evaluate(() => {
+      const log = getLog();
+      return {
+        hs: log.find(e => e.absentTeacher === 'HS Teacher').coveringTeacher,
+        dance: log.find(e => e.absentTeacher === 'Dance Teacher').coveringTeacher,
+      };
+    });
+    expect(result.hs).toBe('Outside Sub');
+    expect(result.dance).toBe('⚠ UNASSIGNED');
+  });
+
+  test('a dance class still gets the outside sub when it is the only absence that period', async ({ page }) => {
+    await gotoApp(page);
+    page.on('dialog', d => d.accept());
+    await page.evaluate(() => {
+      setRoster([]);
+      setLog([]);
+      document.getElementById('run-date').value = '2026-06-01';
+      renderAbsencesTable();
+      document.getElementById('outside-sub-count').value = '1';
+      const row = document.querySelectorAll('#absences-tbody tr')[0];
+      row.querySelector('.abs-teacher').value = '__custom__';
+      row.querySelector('.abs-teacher-custom').value = 'Dance Teacher';
+      row.querySelector('.abs-period').value = '3';
+      row.querySelector('.abs-course').value = 'Dance II';
+      row.querySelector('.abs-section').value = 'PERF 10-1';
+      runCoverage();
+    });
+    expect(await page.evaluate(() => getLog()[0].coveringTeacher)).toBe('Outside Sub');
+  });
+
   test('explicitly marking two same-period absences as "Outside Sub" rotates them across slots instead of both landing on slot 1', async ({ page }) => {
     await gotoApp(page);
     page.on('dialog', d => d.accept());
