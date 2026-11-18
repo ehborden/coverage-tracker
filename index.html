@@ -3476,11 +3476,21 @@ function assignCoverage(absences, dateStr, outsideSubCount) {
       const grades = classGrades({ section: ab.sectionNumber, courseName: ab.courseName });
       return grades.length > 0 && grades.every(g => Number(g) >= 6 && Number(g) <= 8);
     };
-    // Sort: non-MS (HS) periods first, so outside subs only land on a 6-8
-    // class when there's nothing else left for them that period; hardest
-    // to cover first within each of those two groups.
+    // Dance classes meet in another building, so an outside sub who doesn't
+    // know the campus shouldn't be sent there alone if it can be helped.
+    // Matched on the Schedule's Subject, course name, or class ID.
+    const isDance = (ab) => {
+      const sched = scheduledClassFor(ab.absentTeacher, dayName, ab.period);
+      const s = sched && typeof sched === 'object' ? sched : {};
+      return [s.subject, s.courseName, s.section, ab.courseName, ab.sectionNumber]
+        .some(v => /danc/i.test(v || ''));
+    };
+    // Sort: classes an outside sub should avoid (middle school 6-8, dance)
+    // last, so outside subs only land on one when there's nothing else left
+    // for them that period; hardest to cover first within each group.
+    const avoidForOutsideSub = (ab) => isMS(ab) || isDance(ab);
     const autoSorted = unlockedAbsences.filter(ab => ab.absType !== 'outside').sort((a,b) => {
-      const msA = isMS(a) ? 1 : 0, msB = isMS(b) ? 1 : 0;
+      const msA = avoidForOutsideSub(a) ? 1 : 0, msB = avoidForOutsideSub(b) ? 1 : 0;
       if (msA !== msB) return msA - msB;
       const pa = periodCounts[a.period] || 0;
       const pb = periodCounts[b.period] || 0;
