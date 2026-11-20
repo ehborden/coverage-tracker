@@ -709,6 +709,52 @@
     animation: spin 0.6s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── PHONE ──
+     Desktop layout is untouched; below 700px wide the header stacks,
+     button rows wrap instead of running off the right edge, multi-column
+     form rows fold to two columns, and a wide table scrolls inside its
+     own card rather than dragging the whole page sideways. */
+  @media (max-width: 700px) {
+    .header {
+      position: static;
+      height: auto;
+      padding: 10px 12px;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .header > div { width: 100%; }
+    .header > div:last-child { align-items: flex-start !important; }
+    .header-title { font-size: 18px; margin-right: auto; }
+    .nav { flex-wrap: wrap; gap: 2px; }
+    .nav-btn { padding: 8px 10px; }
+
+    .main { padding: 14px 10px; }
+    body:has(#screen-roster.active) .main { max-width: none; }
+    /* position: relative so the hidden .sr-only header labels (absolutely
+       positioned) stay inside the card's scroll box instead of widening
+       the page */
+    .card { padding: 16px 14px; overflow-x: auto; position: relative; }
+    .card-title { font-size: 17px; }
+
+    /* Every row of buttons/controls may wrap on a narrow screen */
+    .flex-between, .flex-end, [style*="display:flex"], [style*="display: flex"] {
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .form-row.cols-3, .form-row.cols-4, .form-row.cols-5,
+    [style*="grid-template-columns:1fr 1fr 1fr 1fr"] { grid-template-columns: 1fr 1fr !important; }
+
+    /* 16px keeps iPhone Safari from zooming in when a field is tapped */
+    input, select, textarea { font-size: 16px; }
+
+    .modal-overlay { padding: 8px; }
+    .modal { padding: 18px 16px; max-height: 94vh; }
+    #sub-print-content { padding: 18px 14px; }
+    .output-doc { padding: 16px 12px; }
+    .day-avail-row { grid-template-columns: 64px 1fr auto; }
+  }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -1218,6 +1264,23 @@
 </div>
 
 <!-- Reset Modal -->
+<div class="modal-overlay" id="outside-checkin-modal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-title">Check These Outside Sub Placements</div>
+    <p style="color:var(--gray-600);margin-bottom:12px;font-size:13px">An outside sub landed in a class you asked to check on: 6th or 7th grade, any advisory, or dance (another building). Nothing else was left for them that period. Keep these, or open Override to change one.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Period</th><th>Class</th><th>Absent Teacher</th><th>Covered By</th><th>Why Check</th></tr></thead>
+        <tbody id="outside-checkin-tbody"></tbody>
+      </table>
+    </div>
+    <div class="flex-end mt-20">
+      <button class="btn btn-ghost" onclick="closeOutsideCheckin();showScreen('override')">Open Override</button>
+      <button class="btn btn-primary" onclick="closeOutsideCheckin()">Keep These</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="reset-modal">
   <div class="modal">
     <div class="modal-title">Reset a Day</div>
@@ -3450,11 +3513,21 @@ function assignCoverage(absences, dateStr, outsideSubCount) {
       const grades = classGrades({ section: ab.sectionNumber, courseName: ab.courseName });
       return grades.length > 0 && grades.every(g => Number(g) >= 6 && Number(g) <= 8);
     };
-    // Sort: non-MS (HS) periods first, so outside subs only land on a 6-8
-    // class when there's nothing else left for them that period; hardest
-    // to cover first within each of those two groups.
+    // Dance classes meet in another building, so an outside sub who doesn't
+    // know the campus shouldn't be sent there alone if it can be helped.
+    // Matched on the Schedule's Subject, course name, or class ID.
+    const isDance = (ab) => {
+      const sched = scheduledClassFor(ab.absentTeacher, dayName, ab.period);
+      const s = sched && typeof sched === 'object' ? sched : {};
+      return [s.subject, s.courseName, s.section, ab.courseName, ab.sectionNumber]
+        .some(v => /danc/i.test(v || ''));
+    };
+    // Sort: classes an outside sub should avoid (middle school 6-8, dance)
+    // last, so outside subs only land on one when there's nothing else left
+    // for them that period; hardest to cover first within each group.
+    const avoidForOutsideSub = (ab) => isMS(ab) || isDance(ab);
     const autoSorted = unlockedAbsences.filter(ab => ab.absType !== 'outside').sort((a,b) => {
-      const msA = isMS(a) ? 1 : 0, msB = isMS(b) ? 1 : 0;
+      const msA = avoidForOutsideSub(a) ? 1 : 0, msB = avoidForOutsideSub(b) ? 1 : 0;
       if (msA !== msB) return msA - msB;
       const pa = periodCounts[a.period] || 0;
       const pb = periodCounts[b.period] || 0;
@@ -3739,6 +3812,7 @@ async function runCoverage() {
 
   let primaryResult = null;
   const unmatchedByDate = []; // rows on a later day with no scheduled match, copied from day one instead
+  const checkIns = []; // outside sub placements worth a second look (grade 6/7, dance)
   for (let i = 0; i < dateList.length; i++) {
     const d = dateList[i];
     // Day 1 uses the rows exactly as entered. Later days pull each
@@ -3758,6 +3832,10 @@ async function runCoverage() {
     if (i > 0) setData('cs_outsidesubcount_' + d, outsideSubCount);
 
     const { assignments, newEntries, unassigned, conflicts, lockedCount } = assignCoverage(dayAbsences, d, outsideSubCount);
+    newEntries.forEach(e => {
+      const why = outsideSubCheckInReason(e, d);
+      if (why) checkIns.push({ date: d, entry: e, why });
+    });
 
     // Update log: a genuinely new absence gets appended, but a key that's
     // already there (most commonly a stale UNASSIGNED row left by Override's
@@ -3810,11 +3888,56 @@ async function runCoverage() {
     );
     alert(`These aren't in the loaded schedule at all, so there's no way to tell whether they need coverage on the later day. The course/room from ${dateStr} was copied instead — double-check them:\n\n` + lines.join('\n'));
   }
+  if (checkIns.length) openOutsideCheckin(checkIns, dateList.length > 1);
   if (dateList.length > 1) {
     showImportAlert('success', `Coverage run for ${dateList.length} school days (${dateStr} → ${dateList[dateList.length - 1]}). Switch the date above to each of the other days and click Run Coverage again to view, print, or email that day's plan — it's already locked in and won't be reassigned.`);
   }
   // Clear so a stale end date doesn't silently turn tomorrow's single-day run into a range
   document.getElementById('run-date-end').value = '';
+}
+
+// ── Outside sub check-in ──
+// After a run, newly placed outside subs in a 6th or 7th grade class,
+// any advisory (any grade), or a dance class (another building) are
+// listed in a pop-up so someone can confirm or change them. Grade comes
+// from the schedule's class ID/name when there's a match, else from the
+// absence row; a standalone grade in a name ("Advisory 7") counts too.
+function checkInGrades(section, courseName) {
+  let grades = classGrades({ section, courseName });
+  if (!grades.length) {
+    const m = `${section || ''} ${courseName || ''}`.match(/(?:^|[^\d])(1[0-2]|[6-9])(?:[^\d]|$)/);
+    if (m) grades = [m[1]];
+  }
+  return grades;
+}
+function outsideSubCheckInReason(entry, dateStr) {
+  if (!isOutsideSub(entry.coveringTeacher)) return null;
+  const dayName = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
+  const sched = scheduledClassFor(entry.absentTeacher, dayName, entry.period);
+  const s = sched && typeof sched === 'object' ? sched : {};
+  const texts = [s.subject, s.courseName, s.section, entry.courseName, entry.sectionNumber];
+  const reasons = [];
+  if (texts.some(v => /danc/i.test(v || ''))) reasons.push('Dance (another building)');
+  const grades = [...checkInGrades(s.section, s.courseName), ...checkInGrades(entry.sectionNumber, entry.courseName)];
+  const young = [...new Set(grades.filter(g => g === '6' || g === '7'))].sort();
+  const isAdvisory = texts.some(v => /advis/i.test(v || ''));
+  if (young.length) reasons.push(`Grade ${young.join('/')}${isAdvisory ? ' advisory' : ''}`);
+  else if (isAdvisory) reasons.push('Advisory');
+  return reasons.length ? reasons.join(', ') : null;
+}
+function openOutsideCheckin(items, showDate) {
+  document.getElementById('outside-checkin-tbody').innerHTML = items.map(({ date, entry, why }) => `
+    <tr>
+      <td>${showDate ? esc(date) + ' ' : ''}P${entry.period}</td>
+      <td>${esc(entry.courseName || entry.sectionNumber || '')}</td>
+      <td>${esc(entry.absentTeacher)}</td>
+      <td>${esc(entry.coveringTeacher)}</td>
+      <td style="color:var(--amber);font-weight:600">${esc(why)}</td>
+    </tr>`).join('');
+  document.getElementById('outside-checkin-modal').classList.add('open');
+}
+function closeOutsideCheckin() {
+  document.getElementById('outside-checkin-modal').classList.remove('open');
 }
 
 async function updateRosterAfterRun(newEntries, dateStr) {
