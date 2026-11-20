@@ -2210,6 +2210,19 @@ function fromB64(b64) {
   return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0)));
 }
 
+// The text of a file read through the Contents API. GitHub only sends a
+// file's contents inline up to 1 MB; above that the reply still has the
+// file's sha but empty contents (encoding "none"). In that case the same
+// file is fetched again through the Git blobs API, which handles files up
+// to 100 MB. Files under 1 MB never take the second step.
+async function contentsText(j) {
+  if (j.content || !j.sha || (j.encoding !== 'none' && !(j.size > 0))) return fromB64(j.content || '');
+  const res = await gh(`/git/blobs/${j.sha}`);
+  if (!res.ok) throw httpError(res);
+  const blob = await res.json();
+  return fromB64(blob.content || '');
+}
+
 async function fetchRemote(name) {
   const res = await gh(`/contents/${SYNC_FILENAME[name]}?t=${Date.now()}`);
   if (res.status === 404) {
@@ -2220,7 +2233,7 @@ async function fetchRemote(name) {
   }
   if (!res.ok) throw httpError(res);
   const j = await res.json();
-  return { sha: j.sha, data: JSON.parse(fromB64(j.content || '')) };
+  return { sha: j.sha, data: JSON.parse(await contentsText(j)) };
 }
 
 // ── Change tracking for roster + log ────────────────────
@@ -2839,7 +2852,7 @@ async function restoreGithubBackup(date) {
     const res = await gh(`${backupUrl(`coverage backup ${date}.json`)}?t=${Date.now()}`);
     if (!res.ok) throw httpError(res);
     const j = await res.json();
-    const payload = JSON.parse(fromB64(j.content || ''));
+    const payload = JSON.parse(await contentsText(j));
     closeRestoreGithubModal();
     await applyBackupPayload(payload);
     alert('Restore complete!');
