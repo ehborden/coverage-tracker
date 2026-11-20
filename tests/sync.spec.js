@@ -322,4 +322,41 @@ test.describe('GitHub sync', () => {
     expect(absences).toHaveLength(1);
     expect(absences[0].teacher).toBe('Jane Smith');
   });
+
+  test('a restore still holds after the next sync, instead of the repo\'s newer copy being merged straight back over it', async ({ page }) => {
+    const store = makeGithubStore();
+    page.on('dialog', d => d.accept());
+    await installGithubMock(page.context(), store);
+    await gotoApp(page);
+    await connectDeviceToSync(page);
+    await waitForSyncIdle(page);
+
+    const mk = (id, name, avail, extra = {}) => ({ id, name, tier: '1', highAvail: false, excluded: false,
+      avail: Object.assign({ Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [] }, avail),
+      lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0, ...extra });
+    await page.evaluate((r) => setRoster(r), [mk('a', 'Avery Stone', { Monday: [1] })]);
+    await page.waitForTimeout(2000);
+    await waitForSyncIdle(page);
+    const backup = await page.evaluate(() => buildBackupPayload());
+
+    // Changes made (and synced) after the backup was taken: a tier change,
+    // a new teacher, a log entry. A restore should undo all three.
+    await page.waitForTimeout(20);
+    await page.evaluate((extra) => {
+      const r = getRoster(); r[0].tier = '3'; r.push(extra); setRoster(r);
+      setLog([{ date: '2026-06-01', absentTeacher: 'Dana Wells', period: 1, courseName: 'Math', coveringTeacher: 'Avery Stone' }]);
+    }, mk('b', 'Blake Marsh', {}));
+    await page.waitForTimeout(2000);
+    await waitForSyncIdle(page);
+
+    await page.evaluate((b) => applyBackupPayload(b), backup);
+    await page.waitForTimeout(2500);
+    await waitForSyncIdle(page);
+
+    expect(await page.evaluate(() => getRoster().map(t => `${t.name}:${t.tier}`))).toEqual(['Avery Stone:1']);
+    expect(await page.evaluate(() => getLog())).toHaveLength(0);
+    // And the repo itself now holds the restored data, for other computers
+    const remote = JSON.parse(Buffer.from(store.files.get('roster.json').content, 'base64').toString());
+    expect(remote.items.map(t => `${t.name}:${t.tier}`)).toEqual(['Avery Stone:1']);
+  });
 });

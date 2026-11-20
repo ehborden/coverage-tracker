@@ -531,4 +531,37 @@ test.describe('Override and Reset Day', () => {
       { label: 'All Others', names: ['Regular Busy'] },
     ]);
   });
+
+  test('Override counts a coverage once per teacher per date: no extra credit for re-applying the same teacher or for a second period the same day', async ({ page }) => {
+    page.on('dialog', d => d.accept());
+    await gotoApp(page);
+    const mk = (id, name, avail, extra = {}) => ({ id, name, tier: '1', highAvail: false, excluded: false,
+      avail: Object.assign({ Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [] }, avail),
+      lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0, ...extra });
+    await page.evaluate((roster) => {
+      setRoster(roster);
+      setLog([
+        { date: '2026-06-01', absentTeacher: 'Dana Wells', period: 1, courseName: 'Math', coveringTeacher: 'Avery Stone' },
+        { date: '2026-06-01', absentTeacher: 'Eli Park', period: 2, courseName: 'Art', coveringTeacher: 'Blake Marsh' },
+      ]);
+      document.getElementById('run-date').value = '2026-06-01';
+      showScreen('override');
+    }, [mk('a', 'Avery Stone', { Monday: [1, 2] }, { totalCoverages: 1, lastCoverageDate: '2026-06-01' }),
+        mk('b', 'Blake Marsh', { Monday: [2] }, { totalCoverages: 1, lastCoverageDate: '2026-06-01' })]);
+    const totals = () => page.evaluate(() => Object.fromEntries(getRoster().map(t => [t.name, t.totalCoverages])));
+    const applyTo = async (period, teacher) => {
+      const idx = await page.evaluate((p) => _overrideEntries.findIndex(e => e.period === p), period);
+      await page.selectOption(`#override-new-${idx}`, teacher);
+      await page.evaluate((i) => applyOverride(i, '2026-06-01'), idx);
+    };
+
+    await applyTo(1, 'Avery Stone'); // same teacher who already has it
+    expect(await totals()).toEqual({ 'Avery Stone': 1, 'Blake Marsh': 1 });
+
+    await applyTo(2, 'Avery Stone'); // a second period for Avery, same date
+    expect(await totals()).toEqual({ 'Avery Stone': 1, 'Blake Marsh': 0 });
+
+    await applyTo(2, 'Blake Marsh'); // and back: Blake is credited again, Avery keeps the one
+    expect(await totals()).toEqual({ 'Avery Stone': 1, 'Blake Marsh': 1 });
+  });
 });
