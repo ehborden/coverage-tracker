@@ -359,4 +359,72 @@ test.describe('GitHub sync', () => {
     const remote = JSON.parse(Buffer.from(store.files.get('roster.json').content, 'base64').toString());
     expect(remote.items.map(t => `${t.name}:${t.tier}`)).toEqual(['Avery Stone:1']);
   });
+
+  test('a file too big for GitHub to send inline (over 1 MB) is still read, so sync keeps working instead of stalling as "Offline"', async ({ page, browser }) => {
+    // A low limit stands in for GitHub's 1 MB, so the test doesn't need a 1 MB log
+    const store = makeGithubStore({ inlineLimit: 2000 });
+    page.on('dialog', d => d.accept());
+    await installGithubMock(page.context(), store);
+    await gotoApp(page);
+    await page.evaluate(() => {
+      const log = [];
+      for (let d = 1; d <= 20; d++) log.push({ date: `2026-06-${String(d).padStart(2, '0')}`, absentTeacher: 'Dana Wells', period: 1, courseName: 'Math', coveringTeacher: 'Avery Stone' });
+      setLog(log);
+    });
+    await connectDeviceToSync(page, { token: 'tok' });
+    await waitForSyncIdle(page);
+    expect(Buffer.from(store.files.get('log.json').content, 'base64').length).toBeGreaterThan(2000);
+
+    // A second computer reads the oversized log.json
+    const contextB = await browser.newContext();
+    const pageB = await contextB.newPage();
+    pageB.on('dialog', d => d.accept());
+    await installGithubMock(contextB, store);
+    await gotoApp(pageB);
+    await connectDeviceToSync(pageB, { token: 'tok' });
+    await waitForSyncIdle(pageB);
+
+    expect(await pageB.evaluate(() => getLog().length)).toBe(20);
+    expect(await pageB.evaluate(() => syncStatus.kind)).toBe('ok');
+    expect(store.blobReads).toBeGreaterThan(0);
+
+    // And it can still save over it: an edit on B reaches A
+    await pageB.evaluate(() => setLog(getLog().concat([{ date: '2026-06-22', absentTeacher: 'Eli Park', period: 2, courseName: 'Art', coveringTeacher: 'Avery Stone' }])));
+    await pageB.waitForTimeout(2000);
+    await waitForSyncIdle(pageB);
+    await page.evaluate(() => runSync(['log']));
+    await waitForSyncIdle(page);
+    expect(await page.evaluate(() => getLog().length)).toBe(21);
+    expect(await page.evaluate(() => syncStatus.kind)).toBe('ok');
+    await contextB.close();
+  });
+
+  test('Restore from GitHub works for a backup too big for GitHub to send inline', async ({ page }) => {
+    const store = makeGithubStore({ inlineLimit: 2000 });
+    page.on('dialog', d => d.accept());
+    await installGithubMock(page.context(), store);
+    await gotoApp(page);
+    const log = [];
+    for (let d = 1; d <= 20; d++) log.push({ date: `2026-06-${String(d).padStart(2, '0')}`, absentTeacher: 'Dana Wells', period: 1, courseName: 'Math', coveringTeacher: 'Zoe Hart' });
+    const backupPayload = {
+      exportedAt: '2026-02-01T00:00:00.000Z', version: '1.0',
+      roster: [{ id: 'z1', name: 'Zoe Hart', tier: '1', highAvail: false, excluded: false,
+        avail: { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [] }, lastCoverageDate: '', previousCoverageDate: '', totalCoverages: 0 }],
+      log, schedule: {}, roomChart: {}, seniorClassesEnded: '0', emailTemplate: '',
+      absences: {}, notes: {}, outsideSubCounts: {},
+    };
+    const body = Buffer.from(JSON.stringify(backupPayload)).toString('base64');
+    expect(Buffer.from(body, 'base64').length).toBeGreaterThan(2000);
+    store.files.set('backups/coverage backup 2026-02-01.json', { content: body, sha: 'shaBig' });
+
+    await connectDeviceToSync(page, { token: 'tok' });
+    await waitForSyncIdle(page);
+    await page.evaluate(() => openRestoreGithubModal());
+    await page.waitForSelector('#restore-github-body button[onclick*="2026-02-01"]');
+    await page.click('#restore-github-body button[onclick*="2026-02-01"]');
+    await page.waitForFunction(() => !document.getElementById('restore-github-modal').classList.contains('open'));
+
+    expect(await page.evaluate(() => getRoster().map(t => t.name))).toEqual(['Zoe Hart']);
+    expect(await page.evaluate(() => getLog().length)).toBe(20);
+  });
 });

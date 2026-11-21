@@ -18,8 +18,13 @@ async function gotoApp(page) {
 // a plain Map the test file holds onto directly, keyed by content path
 // ("roster.json", "backups/coverage backup 2026-01-01.json", ...).
 
+// inlineLimit mirrors GitHub: the Contents API only returns a file's
+// contents inline up to 1 MB; above that it sends the sha with empty
+// contents (encoding "none"), and the file has to be read through the
+// Git blobs API instead. Tests lower it to exercise that path cheaply.
 function makeGithubStore(opts = {}) {
-  return { files: new Map(), private: opts.private !== false, authToken: opts.authToken || null, _n: 0 };
+  return { files: new Map(), private: opts.private !== false, authToken: opts.authToken || null, _n: 0,
+    inlineLimit: opts.inlineLimit || 1024 * 1024, blobReads: 0 };
 }
 
 async function installGithubMock(context, store) {
@@ -37,6 +42,12 @@ async function installGithubMock(context, store) {
     const parts = url.pathname.split('/').filter(Boolean); // ["repos", owner, repo, "contents", ...path]
     if (parts[0] !== 'repos' || parts.length < 3) return json(404, { message: 'Not Found' });
     if (parts.length === 3) return json(200, { private: store.private });
+    if (parts[3] === 'git' && parts[4] === 'blobs' && method === 'GET') {
+      const file = [...store.files.values()].find(f => f.sha === parts[5]);
+      if (!file) return json(404, { message: 'Not Found' });
+      store.blobReads++;
+      return json(200, { sha: file.sha, content: file.content, encoding: 'base64', size: Buffer.from(file.content, 'base64').length });
+    }
     if (parts[3] !== 'contents') return json(404, { message: 'Not Found' });
 
     const filePath = decodeURIComponent(parts.slice(4).join('/'));
@@ -53,7 +64,9 @@ async function installGithubMock(context, store) {
       }
       const file = store.files.get(filePath);
       if (!file) return json(404, { message: 'Not Found' });
-      return json(200, { sha: file.sha, content: file.content });
+      const size = Buffer.from(file.content, 'base64').length;
+      if (size > store.inlineLimit) return json(200, { sha: file.sha, content: '', encoding: 'none', size });
+      return json(200, { sha: file.sha, content: file.content, encoding: 'base64', size });
     }
 
     if (method === 'PUT') {
